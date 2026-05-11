@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "nba",
+  "project_id": "aa43feed-c519-4171-b02c-dbc43be6583e"
+}
