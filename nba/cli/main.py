@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 
 import psycopg
 import typer
@@ -62,7 +62,7 @@ class MultiStatementError(Exception):
         self.query = query
 
 
-def _emit_error(code: str, message: str, context: dict[str, Any], exit_code: int) -> None:
+def _emit_error(code: str, message: str, context: dict[str, Any], exit_code: int) -> NoReturn:
     payload = ErrorPayload(error=code, message=message, context=context)  # type: ignore[arg-type]
     sys.stderr.write(payload.model_dump_json() + "\n")
     sys.stderr.flush()
@@ -332,6 +332,127 @@ def players_show(
             ],
         },
         "warnings": [],
+        "meta": _meta(),
+    }
+    _emit_json(payload)
+
+
+def _resolve_player_id(player_id: str) -> str | None:
+    key = player_id.lower()
+    if key.startswith("stub-"):
+        key = key[len("stub-"):]
+    if key in KNOWN_PLAYERS:
+        return key
+    for known in KNOWN_PLAYERS:
+        if known in key:
+            return known
+    return None
+
+
+@players_app.command("similar")
+def players_similar(
+    player_id: str = typer.Option(..., "--id"),
+    k: int = typer.Option(5, "--k"),
+) -> None:
+    resolved = _resolve_player_id(player_id)
+    if resolved is None:
+        _emit_error(
+            "InvalidPlayerError",
+            f"unknown player id {player_id!r}: not in the stub roster.",
+            {"id": player_id},
+            EXIT_CODES["InvalidPlayerError"],
+        )
+    pool = [p for p in sorted(KNOWN_PLAYERS) if p != resolved]
+    neighbors = [
+        {
+            "player_id": f"stub-{p}",
+            "name": p.title(),
+            "season": 2024,
+            "distance": round(0.10 + 0.05 * i, 4),
+        }
+        for i, p in enumerate(pool[: max(0, k)])
+    ]
+    payload = {
+        "data": {"neighbors": neighbors},
+        "warnings": [
+            {
+                "code": "random_init_embeddings",
+                "message": (
+                    "embeddings are random-init stubs; neighbor ordering is not "
+                    "meaningful yet — use search to pick a replacement."
+                ),
+                "context": {"id": player_id, "k": k},
+            }
+        ],
+        "meta": _meta(),
+    }
+    _emit_json(payload)
+
+
+@players_app.command("search")
+def players_search(
+    q: str = typer.Option(..., "--q"),
+) -> None:
+    needle = q.lower()
+    matches = sorted({p for p in KNOWN_PLAYERS if needle and needle in p})
+    results = [
+        {"player_id": f"stub-{p}", "name": p.title(), "season": season}
+        for p in matches
+        for season in (2022, 2023, 2024)
+    ]
+    warnings_list: list[dict[str, Any]] = []
+    if not results:
+        warnings_list.append({
+            "code": "no_matches",
+            "message": f"no players matched query {q!r} in the stub roster.",
+            "context": {"q": q},
+        })
+    payload = {
+        "data": {"results": results},
+        "warnings": warnings_list,
+        "meta": _meta(),
+    }
+    _emit_json(payload)
+
+
+@players_app.command("career")
+def players_career(
+    player_id: str = typer.Option(..., "--id"),
+) -> None:
+    resolved = _resolve_player_id(player_id)
+    if resolved is None:
+        _emit_error(
+            "InvalidPlayerError",
+            f"unknown player id {player_id!r}: not in the stub roster.",
+            {"id": player_id},
+            EXIT_CODES["InvalidPlayerError"],
+        )
+    seasons = [
+        {
+            "season": season,
+            "team": "NYK",
+            "games": None,
+            "mpg": None,
+            "ppg": None,
+            "rpg": None,
+            "apg": None,
+        }
+        for season in (2022, 2023, 2024)
+    ]
+    payload = {
+        "data": {
+            "player_id": f"stub-{resolved}",
+            "name": resolved.title(),
+            "seasons": seasons,
+        },
+        "warnings": [{
+            "code": "facts_table_empty",
+            "message": (
+                "facts table not yet populated; per-season stat lines returned as "
+                "null until ingest fills the table."
+            ),
+            "context": {"id": player_id},
+        }],
         "meta": _meta(),
     }
     _emit_json(payload)
