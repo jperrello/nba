@@ -23,25 +23,44 @@ comparison with Cleaning the Glass and PBPStats.
 
 ## What needs to exist before I can move (gate)
 
-From Lane A (nba-kve), with full NYK 2022-23 ingested:
+From Lane A (nba-kve), with full NYK 2022-23 ingested (see `docs/ingest_plan.md` for espn-lane's plan):
 - `games` table — 82 rows for NYK 2022-23 regular season, joining team_id.
-- `pbp_events` table — ~35-40k rows, **with `event_type` already normalized
-  to the canonical names from `CONTRACT_STINTS.md`** (`tipoff`, `made_2pt`,
-  `made_3pt`, `missed_2pt`, `missed_3pt`, `ft_made`, `ft_miss`, `rebound_off`,
-  `rebound_def`, `turnover`, `shooting_foul`, `sub`, `period_end`, `game_end`).
-- For `sub` rows: `player_id` = player_out, `raw->>'player_in'` = player_in
-  (or a dedicated column — to be confirmed with espn-lane). My driver needs
-  to extract both ids.
-- Cached `data/raw/espn/summary/{game_id}.json` files — I'll read starters
-  from `boxscore.players[].statistics[0].athletes[]` where
+- `pbp_events` table — ~35-40k rows. **`event_type` is stored as raw ESPN
+  `play.type.text` strings** (e.g. `'Substitution'`, `'Made Shot'`,
+  `'Shooting Foul'`, `'End Period'`). My translator normalizes these to
+  the canonical lowercase vocabulary defined in `CONTRACT_STINTS.md`
+  (`tipoff`, `made_2pt`, `made_3pt`, `missed_2pt`, `missed_3pt`, `ft_made`,
+  `ft_miss`, `rebound_off`, `rebound_def`, `turnover`, `shooting_foul`,
+  `sub`, `period_end`, `game_end`).
+- Sub rows (per espn-lane Q1 answer @ 20a28d9): `event_type = 'Substitution'`,
+  `player_id` = player **IN**, `assist_player_id` = player **OUT**.
+  No JSON extraction needed; both ids are first-class columns.
+- `players_on_floor` JSONB is populated with `'[]'::jsonb` placeholder
+  (espn-lane decision D2/option A). My deriver does **not** read this
+  column — it computes lineups itself from starters + sub events. I may
+  optionally back-fill it post-derive as a separate concern (out of scope
+  this lane; file a follow-up bead if useful).
+- Cached `data/cache/espn/summary/{game_id}.json` files (note: espn-lane
+  decision D3 moved this from `data/raw/espn/` to `data/cache/espn/`).
+  I'll read starters from
+  `boxscore.players[].statistics[0].athletes[]` filtered to where
   `starter == true`.
-- `games.pbp_status` — skip rows where `pbp_status = 'thin'`. Do not crash;
-  emit a structured warning and continue.
+- `games.pbp_status` — skip rows where `pbp_status = 'thin'`. Do not
+  crash; emit a structured warning and continue.
 
-**Open question for espn-lane (route via athena):** how are sub player_in/out
-exposed in pbp_events? If they're not first-class columns, I need a stable
-JSON path in `raw`. Block on this confirmation before writing the row→event
-translator.
+**Open question NEW for espn-lane (route via athena):** the full
+enumeration of `play.type.text` strings that appear in real ESPN PBP for
+2022-23. I need it to write the canonical-vocabulary mapping. Specifically
+the strings used for: tip-off, made/missed 2pt FG, made/missed 3pt FG,
+made/missed FT, offensive rebound, defensive rebound, turnover, shooting
+foul (distinct from non-shooting personal foul, which should NOT trigger
+FT carry), end-of-period, end-of-game. If espn-lane can't enumerate up
+front, I'll `SELECT DISTINCT event_type FROM pbp_events` once a single
+game lands and round-trip with them. Either is fine — but the deriver
+won't process real data until this vocab is pinned.
+
+**Q1 (sub representation) — RESOLVED** @ 20a28d9.
+**Q2 (pts semantics + dry-run JSON) — PENDING** brutus on nba-5ve.
 
 ## Two drivers (the new CLI surface)
 
@@ -90,45 +109,47 @@ game_id = $1 LIMIT 1` already returns a row. Useful for resumable runs.
 
 ## DB-row → event-dict translator
 
-Lives in `nba/stints/translate.py` (new file). Public:
+Lives in `nba/stints/translate.py`. **Partial implementation landed** —
+clock-math helpers + `lineup_hash` are in place and unit-tested (`tests/
+test_stints_translate.py`, 22 tests). What remains is the event-type
+vocabulary mapping + the row-to-event-dict function, both blocked on
+ESPN vocab enumeration (see open Q above).
+
+Final public API:
 
 ```python
 def pbp_rows_to_events(
-    rows: list[asyncpg.Record | dict],
+    rows: list[dict],         # DB rows as dicts (psycopg row_factory=dict_row)
     home_team_id: int,
 ) -> list[dict]:
     ...
 ```
 
 Per-row mapping:
-- `t` = `_wall(quarter, clock_seconds)` — see clock math below.
+- `t` = `game_to_wall(quarter, clock_seconds)` — see helpers (already
+  landed and tested).
 - `period` = `quarter`.
-- `type` = `event_type` (passed through if it matches the canonical set;
-  unknown types → drop, log a warning with sequence_no).
-- `team` = `"home"` if `team_id == home_team_id` else `"away"` if `team_id`
-  is the away team else `None` (for period boundaries / tipoff).
+- `type` = `CANONICAL_TYPE[event_type]` (lookup table; unknown ESPN strings
+  → drop the event with a structured warning so the deriver doesn't see
+  rows it can't handle).
+- `team` = `"home"` if `team_id == home_team_id` else `"away"`, or `None`
+  for period boundaries / tipoff (team_id will be NULL there).
 - `player` = `player_id`.
-- For `sub`: `player_out` = `player_id`, `player_in` = parsed from
-  `raw->>'player_in'` (or whatever espn-lane settles on).
+- For `sub` (canonical), unpack ESPN's convention:
+  `player_in = row["player_id"]`, `player_out = row["assist_player_id"]`.
+- For made/missed shots, **disambiguate 2pt vs 3pt** by `points_scored`:
+  - `event_type='Made Shot'` + `points_scored=2` → `made_2pt`
+  - `event_type='Made Shot'` + `points_scored=3` → `made_3pt`
+  - `event_type='Missed Shot'` → look at the description / shot type
+    (`raw->>'shootingPlay'` or similar — TBD with espn-lane); fallback
+    is to emit `missed_2pt` since that's the modal case. Pin during vocab
+    confirmation.
 - `home_score`/`away_score` pass through.
 
-Clock math:
-```python
-QUARTER_LEN = {1: 720, 2: 720, 3: 720, 4: 720}  # OT periods: 300
-
-def _wall(quarter: int, clock_seconds: int) -> float:
-    prior = sum(QUARTER_LEN.get(q, 300) for q in range(1, quarter))
-    qlen = QUARTER_LEN.get(quarter, 300)
-    return float(prior + (qlen - clock_seconds))
-```
-
-Persistence reverses this:
-```python
-def _game_clock(period: int, wall: float) -> int:
-    prior = sum(QUARTER_LEN.get(q, 300) for q in range(1, period))
-    qlen = QUARTER_LEN.get(period, 300)
-    return int(round(qlen - (wall - prior)))
-```
+Clock math (already implemented in `nba/stints/translate.py`):
+- `game_to_wall(quarter, clock_seconds)` — DB game-clock → deriver wall-clock.
+- `wall_to_game(quarter, wall_seconds)` — deriver wall-clock → DB game-clock.
+- Regulation quarters = 720s, OT = 300s, supports any `quarter >= 1`.
 
 `Stint.wall_start` < `wall_end` (ascending) → in game-clock,
 `start_clock_seconds` > `end_clock_seconds` (descending), which satisfies the
@@ -136,23 +157,16 @@ schema `CHECK (start_clock_seconds >= end_clock_seconds)`.
 
 ## Lineup hash
 
-Canonicalize: sort player ids ascending as strings (lex order is fine because
-ESPN player ids are uniform-width integers, but to be safe sort numerically
-then stringify), join with `,`, hash sha256 hex.
+**Landed in `nba/stints/translate.py`**, unit-tested (order-independence,
+sha256 hex shape, schema regex match, accepts int or str input).
 
-```python
-def lineup_hash(lineup: Iterable[int]) -> str:
-    canon = ",".join(str(p) for p in sorted(int(x) for x in lineup))
-    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
-```
+Canonicalization: sort player ids numerically, stringify, join with `,`,
+sha256 hex. Same 5 players in any order produce the same hash — load-bearing
+for the `nba lineup stats` query.
 
-Satisfies schema regex `^[0-9a-f]{64}$`. **Hash is order-independent** —
-critical, since the same 5 players in any order count as the same lineup
-when querying `nba lineup stats`.
-
-Pure-Python is sufficient; the schema's `pgcrypto digest()` is an
-alternative SQL-side path I'm not using to keep the hash semantics owned in
-one place (Python). Document this in the doc that ships with nba-8oj.
+Pure-Python rather than `pgcrypto digest()` so the hash semantics live in
+one place (Python) and the same function is used at write-time (driver)
+and read-time (CLI query resolution).
 
 ## Real `nba lineup stats` SQL
 
@@ -287,38 +301,41 @@ brutus likes to write the red phase before the lane starts.
 
 ```
 nba/stints/
-  derive.py        # exists; do not touch
-  translate.py     # NEW: pbp_events row → event dict; clock math
-  persist.py       # NEW: lineup_stints INSERT, lineup_hash, idempotency
-  drivers.py       # NEW: single-game + season+team orchestrators
+  derive.py        # exists; do not touch (9/9 green)
+  translate.py     # LANDED (partial): clock math + lineup_hash done;
+                   #   pbp_rows_to_events() pending ESPN vocab
+  persist.py       # TODO: lineup_stints INSERT, idempotency (psycopg)
+  drivers.py       # TODO: single-game + season+team orchestrators
 nba/cli/
-  main.py          # MODIFY: register `nba stints derive`; replace lineup_stats stub
+  main.py          # TODO: register `nba stints derive`; replace lineup_stats stub
 docs/
   stints_plan.md       # THIS FILE
-  stints_validation.md # NEW: nba-9b2 deliverable
+  stints_validation.md # TODO: nba-9b2 deliverable
 tests/
-  test_stints.py            # exists; keep green
-  test_stints_translate.py  # NEW: clock math + row mapping unit tests
-  test_stints_persist.py    # NEW: hash determinism, idempotency
+  test_stints.py            # exists; 9/9 green
+  test_stints_translate.py  # LANDED (22 tests): clock math + hash
+  test_stints_persist.py    # TODO: idempotency in a transactional fixture
 ```
 
 `drivers.py` is the only module that touches both the deriver and the DB;
-keep it the only one that knows about transactions. `derive.py` stays
-pure-fn / DB-agnostic.
+keep it the only one that knows about transactions. `derive.py` and
+`translate.py` stay pure-fn / DB-agnostic.
 
 ## Sequencing
 
-1. (now) write this plan + bd notes; coordinate with brutus.
-2. (gate) wait on nba-kve.
-3. translate.py + unit tests for clock math (no DB).
-4. persist.py + unit tests for hash + idempotency (psycopg over a
-   transactional fixture).
-5. drivers.py — single-game first; manual smoke against one ingested NYK
+1. ✅ plan + bd notes; coordinate with brutus.
+2. ✅ translate.py partial: clock math + lineup_hash + unit tests (no DB).
+3. (gate) wait on nba-kve **and** ESPN vocab confirmation.
+4. translate.py complete: add `CANONICAL_TYPE` lookup + `pbp_rows_to_events`.
+   Unit-test against fixture rows shaped like real DB rows.
+5. persist.py + unit tests for INSERT + idempotency (psycopg over a
+   transactional fixture, infra-lane's local Postgres).
+6. drivers.py — single-game first; manual smoke against one ingested NYK
    game.
-6. season loop. Smoke against full NYK 2022-23.
-7. Replace `lineup_stats` stub. Slice-1 contract tests stay green.
-8. nba-9b2 validation; commit `docs/stints_validation.md`.
-9. Hand off to athena; Lane C unblocks.
+7. season loop. Smoke against full NYK 2022-23.
+8. Replace `lineup_stats` stub. Slice-1 contract tests stay green.
+9. nba-9b2 validation; commit `docs/stints_validation.md`.
+10. Hand off to athena; Lane C unblocks.
 
 ## Risks I'm tracking
 
