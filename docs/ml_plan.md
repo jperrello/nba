@@ -158,16 +158,18 @@ python -m nba.train.embeddings --season 2023 --team NYK [--epochs 1]
 
 File: `nba/train/embeddings.py` (`__main__` block + a `main(season, team, epochs)` function that the smoke test can import). Same for the predictor: `python -m nba.train.predictor`.
 
-### Post-train smoke contract (filed by brutus when I'm ready to implement)
+### Post-train smoke contract
 
-Brutus's smoke runs *after* `python -m nba.train.embeddings` populates the table. Asserts:
+Filed: `nba-bbq` (P2, open) — gated by `nba-z3o` (closed) per overseer D4. Brutus writes the failing smoke when I signal ready on `nba-ibw`. Blocks both `nba-ibw` and `nba-dd1` until green.
+
+Smoke runs *after* `python -m nba.train.embeddings` populates the table. Asserts:
 
 - Row count in `embeddings_player WHERE season = 2023 AND model_version = EMBEDDINGS_VERSION` equals the count of distinct `player_id` in `rosters WHERE season = 2023 AND team_id = NYK`.
 - `vector_dims(embedding) = 128` for every row.
 - `||embedding||_2 ∈ [1 - 1e-4, 1 + 1e-4]` for every row (unit-norm).
 - `season` column populated and `embeddings_player` is queryable via the existing `embeddings_player_model_idx`.
 
-Factor the script so the smoke can hit the same `nba.train.embeddings.main(...)` entry the CLI runs, then re-query the DB to assert.
+Factor the script so the smoke can hit `nba.train.embeddings.main(...)` directly, then re-query the DB to assert.
 
 ---
 
@@ -398,7 +400,7 @@ For each of the 5 holdout games:
        per-game flag is missing — fall back, log a warning).
        """
    ```
-   Cache path follows espn-lane's convention (likely `data/cache/espn/summary/{game_id}.json` — verify with athena once espn-lane finalizes the layout; the plan doesn't hardcode the path).
+   Read order (first hit wins): `config.ESPN_CACHE_DIR / "summary" / f"{game_id}.json"` (live cache, confirmed by espn-lane in `nba-kve` close), then `data/fixtures/espn/{game_id}.json` (committed fixtures for deterministic tests). `nba/config.py:ESPN_CACHE_DIR` resolves to `data/cache/espn/` and honors `NBA_ESPN_CACHE_DIR`.
 
 2. Run `nba sim` with these starters. Mechanism: `nba/sim/loader.py` accepts an optional `starters` override; the held-out eval driver (a script, not a new CLI flag — keeps the contract frozen) calls into the same `sim_data(...)` core function with the override.
 
@@ -531,7 +533,7 @@ Resolved by overseer:
 
 Still open:
 
-- **ESPN summary cache path.** Verify with athena once espn-lane finalizes ingest — expected at `data/cache/espn/summary/{game_id}.json`. `get_starters` reads from `config.ESPN_CACHE_DIR`; no hardcoded path in code.
+- ~~ESPN summary cache path.~~ **Confirmed in `nba-kve` close: `nba/config.py:ESPN_CACHE_DIR` (resolves to `data/cache/espn/`).** `get_starters` reads from there with a fallback to `data/fixtures/espn/`.
 - **`minutes_sample` source.** Per-(player, season) sum of `lineup_stints.duration_seconds / 60` from the stat view, cast to INT. Already noted in row 7 of the risk register.
 
 ---
