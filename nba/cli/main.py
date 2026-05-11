@@ -9,8 +9,9 @@ import typer
 
 from nba.cli import warnings as warn
 from nba.cli._schema_stub import TABLES
+from nba.cli.teamspec import TeamSpecError
 from nba.cli.teamspec import parse as parse_teamspec
-from nba.contracts import ErrorPayload
+from nba.contracts import EXIT_CODES, ErrorPayload
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -99,6 +100,33 @@ def _resolve_player(name: str) -> str | None:
     return None
 
 
+def _parse_team(field: str, spec: str) -> Any:
+    try:
+        return parse_teamspec(spec)
+    except TeamSpecError as e:
+        context = {**e.context, "field": field}
+        _emit_error(e.code, e.message, context, EXIT_CODES[e.code])
+        raise  # unreachable; _emit_error raises typer.Exit
+
+
+def _validate_swap_players(field: str, spec: Any) -> None:
+    for clause in spec.get("swaps", []):
+        for player in clause.get("in", []):
+            if _resolve_player(player) is None:
+                _emit_error(
+                    "InvalidPlayerError",
+                    f"unknown player {player!r} in swap clause for {field}.",
+                    {
+                        "field": field,
+                        "player": player,
+                        "swap": clause,
+                        "team": spec.get("team"),
+                        "season": spec.get("season"),
+                    },
+                    EXIT_CODES["InvalidPlayerError"],
+                )
+
+
 def generate_scouting_take(team1: Any, team2: Any, sim_data: Any) -> str:
     return (
         "Stub scouting take: the model gives the edge to the home side on cleaner "
@@ -132,7 +160,7 @@ def sql(query: str = typer.Argument(..., help="SQL query (single statement only)
             "MultiStatementError",
             "nba sql accepts a single statement; got multiple separated by ';'.",
             {"query": query, "statement_count": len(parts)},
-            MultiStatementError.exit_code,
+            EXIT_CODES["MultiStatementError"],
         )
     payload = {
         "data": {
@@ -157,7 +185,7 @@ def lineup_stats(
             "EraOutOfRangeError",
             f"season {season} is before the data window (>= 2003).",
             {"season": season, "earliest_available": 2003},
-            EraOutOfRangeError.exit_code,
+            EXIT_CODES["EraOutOfRangeError"],
         )
     warnings = []
     resolved = [_resolve_player(p) for p in players]
@@ -187,21 +215,23 @@ def sim(
     no_scouting: bool = typer.Option(False, "--no-scouting"),
     human: bool = typer.Option(False, "--human"),
 ) -> None:
-    t1 = parse_teamspec(team1)
-    t2 = parse_teamspec(team2)
+    t1 = _parse_team("team1", team1)
+    t2 = _parse_team("team2", team2)
+    _validate_swap_players("team1", t1)
+    _validate_swap_players("team2", t2)
     if t1["season"] < 2003:
         _emit_error(
             "EraOutOfRangeError",
             f"team1 season {t1['season']} is before the data window (>= 2003).",
             {"team": t1["team"], "season": t1["season"], "earliest_available": 2003},
-            EraOutOfRangeError.exit_code,
+            EXIT_CODES["EraOutOfRangeError"],
         )
     if t2["season"] < 2003:
         _emit_error(
             "EraOutOfRangeError",
             f"team2 season {t2['season']} is before the data window (>= 2003).",
             {"team": t2["team"], "season": t2["season"], "earliest_available": 2003},
-            EraOutOfRangeError.exit_code,
+            EXIT_CODES["EraOutOfRangeError"],
         )
     sim_data = {
         "score": {"home": 114, "away": 109},
@@ -258,7 +288,7 @@ def players_show(
             "InvalidPlayerError",
             "must provide --name or --id",
             {"name": None, "id": None},
-            InvalidPlayerError.exit_code,
+            EXIT_CODES["InvalidPlayerError"],
         )
     query = name or player_id or ""
     if name is not None:
@@ -268,7 +298,7 @@ def players_show(
                 "InvalidPlayerError",
                 f"unknown player {query!r}: not in the stub roster.",
                 {"name": name, "query": query},
-                InvalidPlayerError.exit_code,
+                EXIT_CODES["InvalidPlayerError"],
             )
         canonical = name.title()
     else:
@@ -291,21 +321,7 @@ def players_show(
 
 
 def main() -> None:
-    try:
-        app()
-    except InvalidPlayerError as e:
-        _emit_error("InvalidPlayerError", f"unknown player {e.name!r}", {"name": e.name}, 3)
-    except EraOutOfRangeError as e:
-        _emit_error(
-            "EraOutOfRangeError",
-            f"season {e.season} is before the data window (>= 2003).",
-            {"season": e.season, "earliest_available": 2003},
-            4,
-        )
-    except InsufficientDataError as e:
-        _emit_error("InsufficientDataError", str(e), {}, 5)
-    except MultiStatementError as e:
-        _emit_error("MultiStatementError", "multi-statement SQL is not allowed", {"query": e.query}, 2)
+    app()
 
 
 if __name__ == "__main__":
