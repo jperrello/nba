@@ -1,4 +1,4 @@
-.PHONY: install test lint typecheck cli db-up db-down db-reset
+.PHONY: install test lint typecheck cli db-up db-down db-reset web web-serve web-dev
 
 install:
 	pip install -e ".[dev]"
@@ -28,3 +28,16 @@ db-down:
 db-reset:
 	docker compose down -v
 	$(MAKE) db-up
+
+web:
+	cd web && npm install --no-fund --no-audit && npm run build
+
+web-serve: web
+	python3 scripts/web/serve.py
+
+web-dev:
+	@echo "vite :5173  |  gateway :8765  (ctrl-c stops both)"
+	@trap 'kill 0' EXIT INT TERM; \
+		python3 scripts/web/serve.py & \
+		(cd web && npm run dev) & \
+		wait
