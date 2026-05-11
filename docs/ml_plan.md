@@ -94,6 +94,8 @@ class PlayerSeasonEmbedding(nn.Module):
 
 128 dims matches `embeddings_player.embedding vector(128)`. Random init is the explicit v0 choice — the goal is to wire pgvector and the predictor end-to-end, not to publish a usable representation.
 
+**Unit-normalize before persist** (per overseer ruling D4 — brutus's post-train smoke asserts `||v|| ≈ 1.0` per row). Done in `nba/embeddings/persist.py` via `v / max(||v||, eps)` immediately before the INSERT. Side benefit: §7's cosine-similarity matchup becomes a plain dot product.
+
 ### Index map
 
 A separate file `nba/embeddings/index.py` maintains `(player_id, season) ↔ int idx`. Persisted in-process during training; embeddings written out by `(player_id, season)` so the int idx never escapes the training process.
@@ -146,13 +148,26 @@ SET embedding = EXCLUDED.embedding,
 
 `model_version` lives in `nba/embeddings/version.py` as `EMBEDDINGS_VERSION = "embeddings-v0-randinit"`. Bumping the string produces a new row family without breaking older rows.
 
-### CLI
+### Entrypoint (overseer ruling D4: NO new CLI subcommand)
 
-`nba embeddings train [--season 2023] [--epochs 1]`. Coordinate with brutus for the contract before adding — proposed JSON shape:
+Script entrypoint, not a `nba ...` subcommand:
 
-```json
-{"data": {"n_player_seasons": 18, "loss": 0.31, "model_version": "embeddings-v0-randinit"}, "warnings": [], "meta": {...}}
 ```
+python -m nba.train.embeddings --season 2023 --team NYK [--epochs 1]
+```
+
+File: `nba/train/embeddings.py` (`__main__` block + a `main(season, team, epochs)` function that the smoke test can import). Same for the predictor: `python -m nba.train.predictor`.
+
+### Post-train smoke contract (filed by brutus when I'm ready to implement)
+
+Brutus's smoke runs *after* `python -m nba.train.embeddings` populates the table. Asserts:
+
+- Row count in `embeddings_player WHERE season = 2023 AND model_version = EMBEDDINGS_VERSION` equals the count of distinct `player_id` in `rosters WHERE season = 2023 AND team_id = NYK`.
+- `vector_dims(embedding) = 128` for every row.
+- `||embedding||_2 ∈ [1 - 1e-4, 1 + 1e-4]` for every row (unit-norm).
+- `season` column populated and `embeddings_player` is queryable via the existing `embeddings_player_model_idx`.
+
+Factor the script so the smoke can hit the same `nba.train.embeddings.main(...)` entry the CLI runs, then re-query the DB to assert.
 
 ---
 
@@ -372,9 +387,23 @@ Stored in `data/splits/predictor_v0.json` under key `"holdout_game_ids"`. Docume
 
 For each of the 5 holdout games:
 
-1. Look up actual starting lineups from `rosters` joined to `pbp_events.players_on_floor[0]` (the lineup at tipoff).
-2. Run `nba sim --team1 NYK@2023 --team2 <opp>@2023` (after wiring the starting-lineup override — likely a new flag like `--lineups-from-game <game_id>` for the eval; if that flag is out of scope, run with the season's most-played starters and document the divergence).
+1. Pull **actual** starters via `get_starters(game_id)` (overseer ruling D5). Helper lives at `nba/sim/starters.py`:
+
+   ```python
+   def get_starters(game_id: int) -> tuple[list[int], list[int]]:
+       """Return (home_starter_ids, away_starter_ids) from the cached ESPN summary.
+
+       Reads boxscore.players[].statistics[0].athletes[] where the per-athlete
+       'starter' flag is true (or the first 5 athletes per side if ESPN's
+       per-game flag is missing — fall back, log a warning).
+       """
+   ```
+   Cache path follows espn-lane's convention (likely `data/cache/espn/summary/{game_id}.json` — verify with athena once espn-lane finalizes the layout; the plan doesn't hardcode the path).
+
+2. Run `nba sim` with these starters. Mechanism: `nba/sim/loader.py` accepts an optional `starters` override; the held-out eval driver (a script, not a new CLI flag — keeps the contract frozen) calls into the same `sim_data(...)` core function with the override.
+
 3. Capture predicted `score.home`, `score.away`.
+
 4. Compare to actual `home_score`, `away_score` from `games`.
 
 ### Pass criteria (the actual gate)
@@ -433,27 +462,31 @@ nba/embeddings/__init__.py                         NEW
 nba/embeddings/model.py                            NEW — PlayerSeasonEmbedding
 nba/embeddings/normalize.py                        NEW — z-score, era_token
 nba/embeddings/index.py                            NEW — (player_id, season) ↔ idx
-nba/embeddings/persist.py                          NEW — psycopg ON CONFLICT upsert
-nba/embeddings/train.py                            NEW — entry point
+nba/embeddings/persist.py                          NEW — psycopg ON CONFLICT upsert; unit-norm before INSERT
 nba/embeddings/version.py                          NEW — EMBEDDINGS_VERSION constant
 nba/predictor/__init__.py                          NEW
 nba/predictor/model.py                             NEW — MLP
-nba/predictor/train.py                             NEW — train loop
 nba/predictor/split.py                             NEW — deterministic train/val/holdout
 nba/predictor/version.py                           NEW — version-string helper
+nba/train/__init__.py                              NEW
+nba/train/embeddings.py                            NEW — `python -m nba.train.embeddings` entrypoint (D4)
+nba/train/predictor.py                             NEW — `python -m nba.train.predictor` entrypoint
 nba/sim/__init__.py                                NEW
-nba/sim/loader.py                                  NEW — load embeddings, lineups
-nba/sim/matchup.py                                 NEW — Hungarian assignment
+nba/sim/loader.py                                  NEW — load embeddings + lineups (accepts starters override)
+nba/sim/starters.py                                NEW — get_starters(game_id) from ESPN summary cache (D5)
+nba/sim/matchup.py                                 NEW — Hungarian assignment over unit-norm vectors
 nba/sim/edges.py                                   NEW — team-edge basis projections
 nba/sim/edge_basis.npy                             NEW — fixed random 4-d basis
 nba/sim/constants.py                               NEW — LEAGUE_AVG_PPP etc.
 nba/cli/model_meta.py                              NEW — MLflow → meta.model_versions
 nba/cli/main.py                                    EDIT — sim path + meta
+scripts/eval_predictor_v0.py                       NEW — drives 5-game holdout eval (not a CLI flag)
 data/splits/predictor_v0.json                      NEW — holdout game IDs
 mlruns/                                            NEW (gitignored)
 docs/predictor_v0_eval.md                          NEW — validation-gate output
 docs/ml_plan.md                                    THIS FILE
-tests/test_player_season_stats_view.py             NEW — env-gated smoke
+tests/test_player_season_stats_view.py             NEW — env-gated SQL view smoke
+# tests/test_embeddings_persist_smoke.py           DEFERRED — brutus files when implementation begins (D4 ruling)
 ```
 
 Notes:
@@ -467,10 +500,10 @@ Notes:
 When Lane B closes (one season of stints persisted):
 
 1. Land `migrations/0003_player_season_stats_view.sql` + its smoke test.
-2. Land embeddings module + persist + CLI subcommand. Run end-to-end on NYK 2022-23. Verify `embeddings_player` has 15-20 rows. **Close `nba-ibw`.**
-3. Land predictor module + split + train. Verify MLflow run exists. **Do not close `nba-dd1` yet.**
-4. Wire real `nba sim`: loader, matchup, edges, reconstruction, model-meta reader. Run the 14 contract tests — all green.
-5. Run validation gate: `nba sim` on 5 holdout games. Write `docs/predictor_v0_eval.md`. If all-sides-in-[90, 130], **close `nba-dd1` and `nba-yb1`.** If not, debug (likely the output-scale reconstruction in §7) and re-run.
+2. Land embeddings module + persist (with unit-norm) + `python -m nba.train.embeddings` script. Run end-to-end on NYK 2022-23. Verify `embeddings_player` row count = distinct NYK 2022-23 players from `rosters`. Wait for brutus's smoke contract bead → turn it green. **Close `nba-ibw`.**
+3. Land predictor module + split + `python -m nba.train.predictor`. Verify MLflow run exists. **Do not close `nba-dd1` yet.**
+4. Wire real `nba sim`: loader, `get_starters`, matchup, edges, reconstruction, model-meta reader. Run the 14 contract tests — all green.
+5. Run validation gate via `scripts/eval_predictor_v0.py`: 5 holdout games with `get_starters(game_id)`-driven starters. Write `docs/predictor_v0_eval.md`. If all-sides-in-[90, 130], **close `nba-dd1` and `nba-yb1`.** If not, debug (likely the output-scale reconstruction in §7) and re-run.
 6. `ruff check .` + `pyright .` clean. Commit + push. Route to athena.
 
 ---
@@ -489,11 +522,17 @@ When Lane B closes (one season of stints persisted):
 
 ---
 
-## 13. Open coordination items (need athena before implementing)
+## 13. Open coordination items
 
-- **`nba embeddings train` CLI contract.** Brutus needs to write the contract test before I land the subcommand. Proposed shape in §3; awaiting confirmation.
-- **`--lineups-from-game` flag on `nba sim`** for the validation gate. Either add it (new contract) or use season-most-played starters and document the divergence. Lean toward the latter to avoid contract churn.
-- **`lineup_stints.minutes_sample` column** — does it already exist? No, it's just a column on `embeddings_player`. Sourced as described in row 7 of the risk register.
+Resolved by overseer:
+
+- ~~`nba embeddings train` CLI contract.~~ **D4: no CLI subcommand.** Script entrypoint `python -m nba.train.embeddings` per §3; brutus files a post-train DB smoke when implementation begins.
+- ~~`--lineups-from-game` flag.~~ **D5: actual boxscore starters.** `get_starters(game_id)` helper at `nba/sim/starters.py` reads ESPN summary cache. Validation driver is a script (`scripts/eval_predictor_v0.py`), not a new CLI flag.
+
+Still open:
+
+- **ESPN summary cache path.** Verify with athena once espn-lane finalizes ingest — expected at `data/cache/espn/summary/{game_id}.json`. `get_starters` reads from `config.ESPN_CACHE_DIR`; no hardcoded path in code.
+- **`minutes_sample` source.** Per-(player, season) sum of `lineup_stints.duration_seconds / 60` from the stat view, cast to INT. Already noted in row 7 of the risk register.
 
 ---
 
