@@ -77,3 +77,32 @@ FAILED tests/test_cli_contract.py::test_players_career_facts_table_empty_warning
 FAILED tests/test_cli_contract.py::test_players_career_unknown_id_raises_invalid_player_error
 ================== 9 failed, 1 passed, 13 deselected in 0.31s ==================
 ```
+
+Green phase — cli-lane landed implementation at 36e40e4. Re-running the contract suite against the same -k filter used to capture red.
+
+```bash
+.venv/bin/python -m pytest tests/test_cli_contract.py -v -k 'players_similar or players_search or players_career or contract_models_importable' 2>&1 | tail -20
+```
+
+```output
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- /Users/jperr/Documents/nba/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/jperr/Documents/nba
+configfile: pyproject.toml
+plugins: asyncio-1.3.0, respx-0.23.1, anyio-4.13.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 23 items / 13 deselected / 10 selected
+
+tests/test_cli_contract.py::test_players_similar_returns_valid_shape PASSED [ 10%]
+tests/test_cli_contract.py::test_players_similar_honors_k PASSED         [ 20%]
+tests/test_cli_contract.py::test_players_similar_random_init_warning_is_allowed PASSED [ 30%]
+tests/test_cli_contract.py::test_players_similar_unknown_id_raises_invalid_player_error PASSED [ 40%]
+tests/test_cli_contract.py::test_players_search_returns_valid_shape PASSED [ 50%]
+tests/test_cli_contract.py::test_players_search_empty_query_returns_envelope_no_error PASSED [ 60%]
+tests/test_cli_contract.py::test_players_career_returns_valid_shape PASSED [ 70%]
+tests/test_cli_contract.py::test_players_career_facts_table_empty_warning_is_allowed PASSED [ 80%]
+tests/test_cli_contract.py::test_players_career_unknown_id_raises_invalid_player_error PASSED [ 90%]
+tests/test_cli_contract.py::test_contract_models_importable PASSED       [100%]
+
+====================== 10 passed, 13 deselected in 0.16s =======================
+```
