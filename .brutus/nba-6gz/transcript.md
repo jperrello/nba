@@ -90,3 +90,26 @@ ERROR tests/test_stints.py::test_sub_mid_possession_attributes_to_stint_at_posse
 ERROR tests/test_stints.py::test_lineups_match_expected - NotImplementedError...
 ============================== 9 errors in 0.04s ===============================
 ```
+
+GREEN PHASE — stints-lane (nba-8gq) closed at 48a83aa. Re-running tests/test_stints.py against the implementation.
+
+```bash
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest tests/test_stints.py -v --tb=short --no-header
+```
+
+```output
+============================= test session starts ==============================
+collecting ... collected 9 items
+
+tests/test_stints.py::test_stint_count_matches_subs_plus_quarter_boundaries PASSED [ 11%]
+tests/test_stints.py::test_each_stint_has_five_on_five PASSED            [ 22%]
+tests/test_stints.py::test_boundaries_align_with_subs_and_period_ends PASSED [ 33%]
+tests/test_stints.py::test_scoring_attributed_to_active_stint PASSED     [ 44%]
+tests/test_stints.py::test_possessions_match_oliver_formula PASSED       [ 55%]
+tests/test_stints.py::test_stint_points_sum_to_box_score PASSED          [ 66%]
+tests/test_stints.py::test_no_stint_crosses_period_boundary PASSED       [ 77%]
+tests/test_stints.py::test_sub_mid_possession_attributes_to_stint_at_possession_start PASSED [ 88%]
+tests/test_stints.py::test_lineups_match_expected PASSED                 [100%]
+
+============================== 9 passed in 0.01s ===============================
+```
