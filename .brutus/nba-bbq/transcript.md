@@ -48,3 +48,22 @@ ERROR tests/test_embeddings_smoke.py::test_season_column_value_is_end_year - ...
 ERROR tests/test_embeddings_smoke.py::test_season_column_never_null - Failed:...
 ============================== 5 errors in 0.11s ===============================
 ```
+
+GREEN PHASE — ml-lane closed nba-ibw at 7bed00c. embeddings_player now has 463 rows (model_version=embeddings-v0-randinit, dim=128, L2-norm within 1e-7), all 19 NYK 2022-23 rostered players covered, season=2023 on every row.
+
+```bash
+NBA_EMBEDDINGS_SMOKE=1 /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest tests/test_embeddings_smoke.py -v --tb=short --no-header
+```
+
+```output
+============================= test session starts ==============================
+collecting ... collected 5 items
+
+tests/test_embeddings_smoke.py::test_row_count_matches_rostered_players PASSED [ 20%]
+tests/test_embeddings_smoke.py::test_embedding_dim_is_128 PASSED         [ 40%]
+tests/test_embeddings_smoke.py::test_vectors_are_l2_normalized PASSED    [ 60%]
+tests/test_embeddings_smoke.py::test_season_column_value_is_end_year PASSED [ 80%]
+tests/test_embeddings_smoke.py::test_season_column_never_null PASSED     [100%]
+
+============================== 5 passed in 0.08s ===============================
+```
