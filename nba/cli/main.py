@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 
@@ -148,7 +148,7 @@ def sql(query: str = typer.Argument(..., help="SQL query (single statement only)
 
 @lineup_app.command("stats")
 def lineup_stats(
-    players: list[str] = typer.Option(..., "--players", help="5 player names/ids."),  # noqa: B008
+    players: Annotated[list[str], typer.Option("--players", help="5 player names/ids.")],
     season: int = typer.Option(..., "--season", help="Season-start year."),
     context: str | None = typer.Option(None, "--context", help="Optional context bundle."),
 ) -> None:
