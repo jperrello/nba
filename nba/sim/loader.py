@@ -119,10 +119,26 @@ def load_player_embeddings(player_ids: list[int], season: int, model_version: st
     return np.stack(out)
 
 
-def view(team_name: str, season: int) -> TeamView:
+def _names_for(player_ids: list[int]) -> list[str]:
+    if not player_ids:
+        return []
+    with psycopg.connect(db().url) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT player_id, full_name FROM players WHERE player_id = ANY(%s)",
+            (player_ids,),
+        )
+        lookup = {int(pid): str(name) for pid, name in cur.fetchall()}
+    return [lookup.get(pid, f"Player {pid}") for pid in player_ids]
+
+
+def view(team_name: str, season: int, starters: list[int] | None = None) -> TeamView:
     team_id, abbr, full = resolve_team(team_name)
     used = nearest_season(team_id, season)
-    pids, names = top_starters(team_id, used)
+    if starters is not None:
+        pids = list(starters)
+        names = _names_for(pids)
+    else:
+        pids, names = top_starters(team_id, used)
     embs = load_player_embeddings(pids, used)
     return TeamView(
         team_id=team_id,

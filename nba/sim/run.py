@@ -53,10 +53,17 @@ def _matchups(h: TeamView, a: TeamView) -> list[dict]:
     return out
 
 
-def run(team1: str, season1: int, team2: str, season2: int) -> tuple[SimResult, list[dict]]:
+def run(
+    team1: str,
+    season1: int,
+    team2: str,
+    season2: int,
+    starters_home: list[int] | None = None,
+    starters_away: list[int] | None = None,
+) -> tuple[SimResult, list[dict]]:
     warnings: list[dict] = []
-    h = view(team1, season1)
-    a = view(team2, season2)
+    h = view(team1, season1, starters=starters_home)
+    a = view(team2, season2, starters=starters_away)
     if h.season_used != h.season_requested:
         warnings.append({
             "code": "season_fallback",
