@@ -192,13 +192,13 @@ export type PlayerCareer = {
 }
 
 export type LineupStats = {
+  stint_count: number
+  possessions: number
+  net_rating: number
+  off_rating?: number | null
+  def_rating?: number | null
   players: string[]
   season: number | string
-  ortg?: number | null
-  drtg?: number | null
-  netrtg?: number | null
-  minutes?: number | null
-  pace?: number | null
 }
 
 // ---------- Helpers ----------
@@ -252,8 +252,8 @@ export function lineupStats(
   players: string[],
   season: number | string,
 ): Promise<ApiResult<LineupStats>> {
-  const argv = ["lineup", "--season", String(season)]
-  for (const p of players) argv.push("--player", p)
+  const argv = ["lineup", "stats", "--season", String(season)]
+  for (const p of players) argv.push("--players", p)
   return run<LineupStats>(argv)
 }
 
