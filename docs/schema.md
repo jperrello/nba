@@ -328,3 +328,38 @@ expected = sha256("3032976:2023|3133628:2023|3147657:2023|3998191:2023|977:2023"
 ```
 
 (Note: `977` sorts *after* the seven-digit IDs because `'9' > '3'`.)
+
+## Migration 0002 — `pbp_status`
+
+**File:** `migrations/0002_pbp_status.sql`. Adds one column to `games`:
+
+| column | type | notes |
+|---|---|---|
+| `pbp_status` | `TEXT NOT NULL DEFAULT 'ok' CHECK (pbp_status IN ('ok', 'thin'))` | Quality flag for the game's play-by-play data. |
+
+A partial index covers the non-`ok` rows:
+
+```sql
+CREATE INDEX games_pbp_status_thin_idx
+    ON games (pbp_status)
+    WHERE pbp_status <> 'ok';
+```
+
+**Why this exists.** ESPN's PBP feed is incomplete for a non-trivial slice of games — sometimes the endpoint returns a single play, sometimes a handful, sometimes nothing usable at all. The known canary is game `230126018`, which has a **1-play PBP** payload. We cannot ingest stints from these games, but we still want the boxscore row and we still want the rest of the season to land cleanly. Hard-crashing the ingest when one game out of 1,230 has a broken feed is the wrong default.
+
+**How it's set.** Detection is by **row count, not by game ID**. The ingest path (`nba ingest season` per `OVERSEER_BRIEF.md` Lane A item 4) writes:
+
+- `pbp_status = 'ok'` when `len(plays) >= 50` — the threshold below which stint reconstruction is unreliable. (Real games have ~400-500 plays; 50 is a generous floor that flags pathologically incomplete feeds.)
+- `pbp_status = 'thin'` when `len(plays) < 50`. Ingest still writes the `games` row + boxscore-derived `rosters` + `coach_games`. It logs a structured warning and **skips** stint derivation for that game.
+
+Storing by row count (not by hardcoded ID) means new bad games discovered in future seasons are caught automatically — the `230126018` case is the *kind* this catches, not the specific case.
+
+**Downstream contract.**
+
+- `lineup_stints` writers MUST filter `games.pbp_status = 'ok'` before deriving stints.
+- The predictor's training query MUST join through `games` and exclude `pbp_status = 'thin'` rows. The `lineup_stints` table itself has no `pbp_status` column — joining through the game is the canonical filter.
+- The `nba lineup stats` SQL queries are unaffected (they read from `lineup_stints`, which is already empty for thin games).
+
+**Future values.** If we discover other failure modes (boxscore-missing, schedule-only stubs, postponed-not-played) and need to distinguish them, extend the CHECK constraint in a follow-up migration rather than re-typing the column. `TEXT + CHECK` was chosen over an `ENUM` precisely because adding values to a CHECK is a one-line `ALTER TABLE ... DROP CONSTRAINT ... ADD CONSTRAINT` and doesn't require a `pg_enum` mutation.
+
+**Idempotency.** Uses `ADD COLUMN IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` — safe to re-run.
