@@ -152,6 +152,67 @@ class PlayersShowOutput(BaseModel):
     meta: Meta
 
 
+# nba players similar
+
+class SimilarNeighbor(BaseModel):
+    player_id: str
+    name: str
+    season: int
+    distance: float
+
+
+class SimilarData(BaseModel):
+    neighbors: list[SimilarNeighbor]
+
+
+class SimilarOutput(BaseModel):
+    data: SimilarData
+    warnings: list[Warning] = Field(default_factory=list)
+    meta: Meta
+
+
+# nba players search
+
+class PlayersSearchResult(BaseModel):
+    player_id: str
+    name: str
+    season: int
+
+
+class PlayersSearchData(BaseModel):
+    results: list[PlayersSearchResult]
+
+
+class PlayersSearchOutput(BaseModel):
+    data: PlayersSearchData
+    warnings: list[Warning] = Field(default_factory=list)
+    meta: Meta
+
+
+# nba players career
+
+class PlayersCareerSeason(BaseModel):
+    season: int
+    team: str
+    games: int | None = None
+    mpg: float | None = None
+    ppg: float | None = None
+    rpg: float | None = None
+    apg: float | None = None
+
+
+class PlayersCareerData(BaseModel):
+    player_id: str
+    name: str
+    seasons: list[PlayersCareerSeason]
+
+
+class PlayersCareerOutput(BaseModel):
+    data: PlayersCareerData
+    warnings: list[Warning] = Field(default_factory=list)
+    meta: Meta
+
+
 # nba ingest season
 
 class IngestData(BaseModel):

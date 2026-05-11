@@ -15,9 +15,12 @@ from nba.cli.main import app
 from nba.contracts import (
     ErrorPayload,
     LineupStatsOutput,
+    PlayersCareerOutput,
+    PlayersSearchOutput,
     PlayersShowOutput,
     SchemaOutput,
     SimOutput,
+    SimilarOutput,
     SqlOutput,
 )
 
@@ -272,6 +275,129 @@ def test_sparse_data_emits_structured_warning():
     assert isinstance(sparse[0].context["n_effective"], (int, float))
 
 
+# nba players similar / search / career (brutus contract nba-v0n)
+#
+# These three subcommands feed the web GUI picker. The shape lives in
+# nba/contracts.py — SimilarOutput, PlayersSearchOutput, PlayersCareerOutput —
+# and the assertions below are intentionally black-box: invoke via CliRunner,
+# parse stdout JSON, validate against the model, never reach behind the CLI.
+# Stubbed data is fine; missing data is signaled via the documented warning
+# codes (random_init_embeddings, no_matches, facts_table_empty).
+
+KNOWN_PLAYER_ID = "stub-brunson"
+
+
+def test_players_similar_returns_valid_shape():
+    result = runner.invoke(
+        app, ["players", "similar", "--id", KNOWN_PLAYER_ID, "--k", "5"]
+    )
+    payload = _stdout_json(result)
+    parsed = SimilarOutput.model_validate(payload)
+    assert len(parsed.data.neighbors) <= 5, (
+        f"--k 5 caps neighbors at 5, got {len(parsed.data.neighbors)}"
+    )
+    distances = [n.distance for n in parsed.data.neighbors]
+    assert distances == sorted(distances), (
+        f"neighbors must be ascending by distance, got {distances}"
+    )
+    for n in parsed.data.neighbors:
+        assert n.player_id
+        assert n.name
+        assert isinstance(n.season, int)
+        assert isinstance(n.distance, float)
+
+
+def test_players_similar_honors_k():
+    result = runner.invoke(
+        app, ["players", "similar", "--id", KNOWN_PLAYER_ID, "--k", "2"]
+    )
+    payload = _stdout_json(result)
+    parsed = SimilarOutput.model_validate(payload)
+    assert len(parsed.data.neighbors) <= 2, (
+        f"--k 2 caps neighbors at 2, got {len(parsed.data.neighbors)}"
+    )
+
+
+def test_players_similar_random_init_warning_is_allowed():
+    """Until real embeddings land, the implementer may stub neighbors and emit a
+    random_init_embeddings warning. The web GUI keys off this code to render an
+    empty-state hint in the picker. Tolerate either: a warning with this code OR
+    no warning at all — but if the warning exists it must validate."""
+    result = runner.invoke(
+        app, ["players", "similar", "--id", KNOWN_PLAYER_ID, "--k", "5"]
+    )
+    payload = _stdout_json(result)
+    parsed = SimilarOutput.model_validate(payload)
+    rnd = [w for w in parsed.warnings if w.code == "random_init_embeddings"]
+    for w in rnd:
+        assert w.message
+
+
+def test_players_similar_unknown_id_raises_invalid_player_error():
+    result = runner.invoke(
+        app, ["players", "similar", "--id", "zzz-not-a-player", "--k", "5"]
+    )
+    parsed = _stderr_error(result, exit_code=3, error_code="InvalidPlayerError")
+    assert "zzz-not-a-player" in parsed.message.lower() or (
+        "zzz-not-a-player" in str(parsed.context)
+    )
+
+
+def test_players_search_returns_valid_shape():
+    result = runner.invoke(app, ["players", "search", "--q", "brunson"])
+    payload = _stdout_json(result)
+    parsed = PlayersSearchOutput.model_validate(payload)
+    for r in parsed.data.results:
+        assert r.player_id
+        assert r.name
+        assert isinstance(r.season, int)
+
+
+def test_players_search_empty_query_returns_envelope_no_error():
+    """Empty/no-match queries must NOT raise. An empty results list is the
+    contract; a no_matches warning is optional. Web GUI renders the empty state
+    on len(results) == 0."""
+    result = runner.invoke(app, ["players", "search", "--q", "zzznoonezzz"])
+    payload = _stdout_json(result)
+    parsed = PlayersSearchOutput.model_validate(payload)
+    if not parsed.data.results:
+        nm = [w for w in parsed.warnings if w.code == "no_matches"]
+        for w in nm:
+            assert w.message
+
+
+def test_players_career_returns_valid_shape():
+    result = runner.invoke(app, ["players", "career", "--id", KNOWN_PLAYER_ID])
+    payload = _stdout_json(result)
+    parsed = PlayersCareerOutput.model_validate(payload)
+    assert parsed.data.player_id
+    assert parsed.data.name
+    for s in parsed.data.seasons:
+        assert isinstance(s.season, int)
+        assert s.team
+        for stat in (s.games, s.mpg, s.ppg, s.rpg, s.apg):
+            assert stat is None or isinstance(stat, (int, float))
+
+
+def test_players_career_facts_table_empty_warning_is_allowed():
+    """Until facts is populated, the implementer may return seasons with null
+    stats and emit a facts_table_empty warning. Validate the shape either way."""
+    result = runner.invoke(app, ["players", "career", "--id", KNOWN_PLAYER_ID])
+    payload = _stdout_json(result)
+    parsed = PlayersCareerOutput.model_validate(payload)
+    fte = [w for w in parsed.warnings if w.code == "facts_table_empty"]
+    for w in fte:
+        assert w.message
+
+
+def test_players_career_unknown_id_raises_invalid_player_error():
+    result = runner.invoke(app, ["players", "career", "--id", "zzz-not-a-player"])
+    parsed = _stderr_error(result, exit_code=3, error_code="InvalidPlayerError")
+    assert "zzz-not-a-player" in parsed.message.lower() or (
+        "zzz-not-a-player" in str(parsed.context)
+    )
+
+
 # pydantic guards (these fail at import time if the model surface drifts)
 
 def test_contract_models_importable():
@@ -282,6 +408,9 @@ def test_contract_models_importable():
         LineupStatsOutput,
         SimOutput,
         PlayersShowOutput,
+        SimilarOutput,
+        PlayersSearchOutput,
+        PlayersCareerOutput,
         ErrorPayload,
     ):
         assert hasattr(cls, "model_validate")

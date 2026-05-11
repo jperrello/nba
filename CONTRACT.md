@@ -141,3 +141,59 @@ A run is "correct" when:
 ## Red transcript
 
 Captured at `.brutus/nba-3fv/transcript.md` (see "red sha" in bead notes).
+
+---
+
+## Addendum: nba-v0n (players similar / search / career)
+
+Brutus contract `nba-v0n` adds three subcommands consumed by the web GUI
+picker. Full contract at `.brutus/nba-v0n/CONTRACT.md`; red transcript at
+`.brutus/nba-v0n/transcript.md`. New pydantic models live in
+`nba/contracts.py` alongside the existing ones.
+
+### `nba players similar --id ID --k K`
+
+Returns `SimilarOutput`:
+```
+{
+  data: {neighbors: [{player_id, name, season, distance: float} ...]},
+  warnings: [...],
+  meta: {...}
+}
+```
+`len(neighbors) <= K`, sorted ascending by `distance`. Unknown id → exit 3
+`InvalidPlayerError`. May emit a `random_init_embeddings` warning while
+embeddings are stubbed.
+
+### `nba players search --q QUERY`
+
+Returns `PlayersSearchOutput`:
+```
+{
+  data: {results: [{player_id, name, season} ...]},
+  warnings: [...],
+  meta: {...}
+}
+```
+Empty `results` is valid; no-match queries return exit 0 (no error). May emit
+a `no_matches` warning when `results` is empty.
+
+### `nba players career --id ID`
+
+Returns `PlayersCareerOutput`:
+```
+{
+  data: {
+    player_id, name,
+    seasons: [{season, team, games, mpg, ppg, rpg, apg} ...]
+  },
+  warnings: [...],
+  meta: {...}
+}
+```
+Each of `games`, `mpg`, `ppg`, `rpg`, `apg` may be `null` independently.
+Unknown id → exit 3 `InvalidPlayerError`. May emit a `facts_table_empty`
+warning when stats are null.
+
+Exit codes unchanged from the table above (3 = `InvalidPlayerError`).
+
