@@ -74,3 +74,4 @@ checkpoints/
 
 # Crew bookkeeping (per-project scoped, kept local)
 .claude/crew/
+.claude/scheduled_tasks.lock
