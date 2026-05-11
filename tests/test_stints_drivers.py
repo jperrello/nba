@@ -57,11 +57,23 @@ def test_derive_for_game_thin_pbp_skipped():
 
 
 def test_derive_for_game_missing_starters_warns():
-    conn = FakeConn([(2023, 18, 11, "ok")])
+    sparse_pbp = [
+        (1, 1, 720, 18, 100, None, "made_2pt", 2, 2, 0),
+        (2, 1, 700, 18, 101, None, "made_2pt", 2, 4, 0),
+    ]
+    conn = FakeConn([(2023, 18, 11, "ok"), sparse_pbp])
     result = derive_for_game(conn, 401, cache_root=Path("/nonexistent"))
     assert result["records"] == []
     assert result["games_processed"] == 1
     assert result["warnings"][0]["code"] == "missing_starters"
+
+
+def test_derive_for_game_empty_pbp_returns_silently():
+    conn = FakeConn([(2023, 18, 11, "ok"), []])
+    result = derive_for_game(conn, 401, cache_root=Path("/nonexistent"))
+    assert result["records"] == []
+    assert result["games_processed"] == 1
+    assert result["warnings"] == []
 
 
 def test_derive_for_game_with_real_fixture(tmp_path: Path):

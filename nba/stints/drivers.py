@@ -10,6 +10,49 @@ from nba.stints.translate import pbp_rows_to_events
 DEFAULT_CACHE_ROOT = Path("data/cache/espn")
 
 
+def _starters_from_pbp_rows(
+    rows: list[dict[str, Any]],
+    home_team_id: int,
+    away_team_id: int,
+) -> tuple[list[int], list[int]] | None:
+    teams = {home_team_id, away_team_id}
+    first_role: dict[int, dict[int, str]] = {
+        home_team_id: {}, away_team_id: {}
+    }
+    first_order: dict[int, dict[int, int]] = {
+        home_team_id: {}, away_team_id: {}
+    }
+    order_counter = 0
+    for r in rows:
+        t = r.get("team_id")
+        if t not in teams:
+            continue
+        pid = r.get("player_id")
+        aid = r.get("assist_player_id")
+        if r["event_type"] == "substitution":
+            if aid is not None and aid not in first_role[t]:
+                first_role[t][aid] = "ON"
+                first_order[t][aid] = order_counter
+                order_counter += 1
+            if pid is not None and pid not in first_role[t]:
+                first_role[t][pid] = "IN"
+                first_order[t][pid] = order_counter
+                order_counter += 1
+        else:
+            if pid is not None and pid not in first_role[t]:
+                first_role[t][pid] = "ON"
+                first_order[t][pid] = order_counter
+                order_counter += 1
+    result: dict[int, list[int]] = {}
+    for team_id in teams:
+        starters = [p for p, role in first_role[team_id].items() if role == "ON"]
+        if len(starters) < 5:
+            return None
+        order = first_order[team_id]
+        result[team_id] = sorted(starters, key=lambda p: order[p])[:5]
+    return result[home_team_id], result[away_team_id]
+
+
 def _starters_from_boxscore(
     game_id: int,
     home_team_id: int,
@@ -114,25 +157,11 @@ def derive_for_game(
                 }
             ],
         }
-    starters = _starters_from_boxscore(game_id, home_team_id, away_team_id, cache_root)
-    if starters is None:
-        return {
-            "records": [],
-            "games_processed": 1,
-            "games_skipped_thin_pbp": 0,
-            "warnings": [
-                {
-                    "code": "missing_starters",
-                    "message": f"cannot locate starters for game {game_id} in cached boxscore",
-                    "context": {"game_id": game_id, "cache_root": str(cache_root)},
-                }
-            ],
-        }
-    starters_home, starters_away = starters
     cur.execute(
         "SELECT sequence_no, quarter, clock_seconds, team_id, player_id, "
         "assist_player_id, event_type, points_scored, home_score, away_score "
-        "FROM pbp_events WHERE game_id = %s ORDER BY quarter, sequence_no",
+        "FROM pbp_events WHERE game_id = %s "
+        "ORDER BY quarter, clock_seconds DESC, sequence_no",
         (game_id,),
     )
     cols: tuple[str, ...] = (
@@ -149,6 +178,23 @@ def derive_for_game(
             "games_skipped_thin_pbp": 0,
             "warnings": [],
         }
+    starters = _starters_from_pbp_rows(rows, home_team_id, away_team_id)
+    if starters is None:
+        starters = _starters_from_boxscore(game_id, home_team_id, away_team_id, cache_root)
+    if starters is None:
+        return {
+            "records": [],
+            "games_processed": 1,
+            "games_skipped_thin_pbp": 0,
+            "warnings": [
+                {
+                    "code": "missing_starters",
+                    "message": f"cannot infer starters for game {game_id} (PBP and cached boxscore both unavailable)",
+                    "context": {"game_id": game_id, "cache_root": str(cache_root)},
+                }
+            ],
+        }
+    starters_home, starters_away = starters
     events = pbp_rows_to_events(rows, home_team_id=home_team_id)
     stints = derive_stints(events, starters_home=starters_home, starters_away=starters_away)
     records = _records_from_stints(
