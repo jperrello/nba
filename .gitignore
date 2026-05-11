@@ -55,8 +55,9 @@ Thumbs.db
 
 # Project data
 data/raw/
+data/cache/
+data/corpus/
 data/fixtures/large/
-data/fixtures/espn/*/schedule.json
 *.parquet
 *.arrow
 runs/
