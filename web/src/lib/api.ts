@@ -203,25 +203,28 @@ export type LineupStats = {
 
 // ---------- Helpers ----------
 
-export type SimOpts = {
-  swaps?: Array<{ from: string; to: string; side: "home" | "away" }>
+export type Swap = { from: string; to: string }
+
+export type TeamSpec = {
+  team: string
+  season: number | string
+  swaps?: Swap[]
+}
+
+export function encodeTeam(spec: TeamSpec): string {
+  const head = `${spec.team}-${spec.season}`
+  if (!spec.swaps?.length) return head
+  const inner = spec.swaps.map((s) => `${s.from}->${s.to}`).join(",")
+  return `${head}[swap=${inner}]`
 }
 
 export function simulate(
-  homeTeam: string,
-  homeSeason: number | string,
-  awayTeam: string,
-  awaySeason: number | string,
-  opts: SimOpts = {},
+  team1: TeamSpec,
+  team2: TeamSpec,
+  opts: { noScouting?: boolean } = {},
 ): Promise<ApiResult<SimData>> {
-  const argv = [
-    "sim",
-    "--home", `${homeTeam}-${homeSeason}`,
-    "--away", `${awayTeam}-${awaySeason}`,
-  ]
-  for (const s of opts.swaps ?? []) {
-    argv.push("--swap", `${s.side}:${s.from}->${s.to}`)
-  }
+  const argv = ["sim", "--team1", encodeTeam(team1), "--team2", encodeTeam(team2)]
+  if (opts.noScouting) argv.push("--no-scouting")
   return run<SimData>(argv)
 }
 
