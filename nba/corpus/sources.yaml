@@ -1,0 +1,30 @@
+# SFT corpus sources for nba-7t3 sample pipeline.
+#
+# Reddit subreddits (per OVERSEER_BRIEF.md Lane D bullet 3 + bead description):
+#   broad voice + team-specific film/coach analysis subreddits.
+# YouTube videos: brand-safe analyst content. Specific video URLs (not channel
+# auto-fetch) so the sample run is deterministic without a YouTube Data API key.
+
+reddit:
+  subreddits:
+    - nba
+    - nbadiscussion
+    - heat
+    - nyknicks
+    - lakers
+
+youtube:
+  # Each entry is a specific video. The pipeline downloads audio with yt-dlp
+  # and transcribes with faster-whisper. Sample pipeline only — 2-3 videos is
+  # plenty for the size verdict (each ~5-15 min produces 30-100 chunks).
+  # All entries are brand-safe analyst content. Replace / extend in follow-up runs.
+  videos:
+    - url: https://www.youtube.com/watch?v=k0tn9QRJMec
+      channel: Thinking Basketball
+      note: Anthony Davis defensive analysis
+    - url: https://www.youtube.com/watch?v=lyCYzSrYp-k
+      channel: Thinking Basketball
+      note: Kyle Lowry analysis
+    - url: https://www.youtube.com/watch?v=wDViQIwOtY8
+      channel: Thinking Basketball
+      note: LeBron 2016 finals analysis
