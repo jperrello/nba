@@ -1,9 +1,18 @@
 # Lane C — Embeddings + Predictor v0 (ml-lane plan)
 
-> **Status:** PLAN ONLY. Blocked on Lane A (`nba-kve` ingest) and Lane B (`nba-8oj` stints persist).
-> When Lane B signals "one full season of NYK 2022-23 stints in `lineup_stints`," implementation begins.
+> **Status:** `nba-ibw` GREEN. Embeddings landed; brutus's `nba-bbq` smoke (5/5) passes.
+> Next up: `nba-dd1` (predictor + real `nba sim`) and `nba-yb1` (validation gate).
 > Owns beads: `nba-ibw` (embeddings), `nba-dd1` (predictor + real `nba sim`), `nba-yb1` (validation gate).
 > Frozen surfaces: `nba/contracts.py`, the 14 sim contract tests in `tests/test_cli_contract.py`.
+
+### Lane B handoff note (read before nba-dd1)
+
+stints-lane's `docs/stints_validation.md` flagged a systematic **~5.5% possession undercount** (Oliver-weight bias, filed `nba-arn` P3). Net rating is bias-free (symmetric across off/def); raw per-possession ratings are inflated. **For the predictor target, use signed margin (`lineup_stints.pts = home_pts - away_pts`) weighted by `duration_seconds`, NOT divided by `possessions`.** Updates plan §5 — to be applied when starting `nba-dd1`.
+
+### Scope adjustment for nba-ibw (landed)
+
+- Built embeddings for **all 463 rostered players in season 2023** (30 teams), not NYK-only. Predictor (`nba-dd1`) needs opponent vectors too; doing it now avoids re-running training later. Brutus's smoke filters to NYK cohort (19 rows) and passes — superset is contract-compatible.
+- **Skipped the SQL view** (`migrations/0003_player_season_stats_view.sql`). With random-init embeddings + no stat features in the predictor input (just embedding sums/means + era + flag), the per-(player, season) stat view has no consumer in v0. Defer to v1.
 
 ---
 

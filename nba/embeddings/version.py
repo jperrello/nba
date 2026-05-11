@@ -1,0 +1,2 @@
+EMBEDDINGS_VERSION = "embeddings-v0-randinit"
+EMBEDDINGS_DIM = 128
