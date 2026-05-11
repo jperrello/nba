@@ -28,10 +28,10 @@ export const PRESETS: Preset[] = [
     away: { team: "celtics", season: 2010 },
   },
   {
-    id: "bulls-1996_vs_sonics-1996",
-    label: "Bulls 1996 vs Sonics 1996",
-    home: { team: "bulls", season: 1996 },
-    away: { team: "sonics", season: 1996 },
+    id: "lakers-2008_vs_celtics-2008",
+    label: "Lakers 2008 vs Celtics 2008",
+    home: { team: "lakers", season: 2008 },
+    away: { team: "celtics", season: 2008 },
   },
   {
     id: "heat-2013_vs_spurs-2013",

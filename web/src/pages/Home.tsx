@@ -4,8 +4,16 @@ import { MatchupsRail } from "@/components/MatchupsRail"
 import { BrowseRail } from "@/components/BrowseRail"
 import { useLocalStorage } from "@/hooks/useLocalStorage"
 import { DEFAULT_PRESET_ID, presetById } from "@/data/presets"
+import type { LineupPrefill } from "@/App"
+import type { Tab } from "@/components/nav/Nav"
 
-export default function Home() {
+type Props = {
+  setTab: (t: Tab) => void
+  setOpenPlayerId: (id: string | null) => void
+  setLineupPrefill: (p: LineupPrefill | null) => void
+}
+
+export default function Home({ setTab, setOpenPlayerId, setLineupPrefill }: Props) {
   const [storedId, setStoredId] = useLocalStorage<string>("nba.hero.matchup", DEFAULT_PRESET_ID)
 
   const initial: MatchupSpec = useMemo(() => {
@@ -21,11 +29,21 @@ export default function Home() {
     [setStoredId],
   )
 
+  const onOpenPlayer = useCallback((id: string) => {
+    setOpenPlayerId(id)
+    setTab("players")
+  }, [setOpenPlayerId, setTab])
+
+  const onOpenLineup = useCallback((prefill: { players: string[]; season: number }) => {
+    setLineupPrefill(prefill)
+    setTab("lineups")
+  }, [setLineupPrefill, setTab])
+
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       <MatchupCard initial={initial} />
       <MatchupsRail onPick={onPick} />
-      <BrowseRail />
+      <BrowseRail onOpenPlayer={onOpenPlayer} onOpenLineup={onOpenLineup} />
     </section>
   )
 }

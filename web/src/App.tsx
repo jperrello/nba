@@ -14,7 +14,13 @@ export default function App() {
     <div className="min-h-screen">
       <Nav active={tab} onChange={setTab} />
       <main className="mx-auto" style={{ maxWidth: 1200, padding: "24px" }}>
-        {tab === "home" && <Home />}
+        {tab === "home" && (
+          <Home
+            setTab={setTab}
+            setOpenPlayerId={setOpenPlayerId}
+            setLineupPrefill={setLineupPrefill}
+          />
+        )}
         {tab === "players" && (
           <Players
             setTab={setTab}

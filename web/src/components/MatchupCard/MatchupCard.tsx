@@ -291,11 +291,37 @@ function applySide(roster: Roster, swaps: Swap[]): Roster {
   return out
 }
 
+// CLI emits abbrev (e.g. "NY"); TeamSpec.team carries the franchise label ("knicks").
+// Bridge both directions with a static alias map.
+const ALIAS: Record<string, string> = {
+  ny: "knicks", nyk: "knicks",
+  bkn: "nets", brk: "nets",
+  bos: "celtics",
+  gsw: "warriors", gs: "warriors",
+  lal: "lakers",
+  lac: "clippers",
+  mia: "heat",
+  ind: "pacers",
+  chi: "bulls",
+  sea: "sonics", okc: "thunder",
+  sas: "spurs",
+  cle: "cavaliers", cav: "cavaliers",
+  dal: "mavericks", mav: "mavericks",
+  phx: "suns", phi: "76ers", det: "pistons", den: "nuggets",
+  hou: "rockets", mil: "bucks", min: "timberwolves",
+  no: "pelicans", nop: "pelicans", orl: "magic", atl: "hawks",
+  cha: "hornets", was: "wizards", tor: "raptors", mem: "grizzlies",
+  sac: "kings", por: "trail blazers", utah: "jazz", uta: "jazz",
+}
+
+function franchise(s: string): string {
+  const k = s.toLowerCase()
+  return ALIAS[k] ?? k
+}
+
 function warningMatchesTeam(w: Warning, t: TeamSpec): boolean {
   if (w.code !== "season_fallback") return false
   const ctx = w.context as { team?: string } | undefined
   if (!ctx?.team) return false
-  const a = ctx.team.toLowerCase()
-  const b = t.team.toLowerCase()
-  return a.includes(b) || b.includes(a)
+  return franchise(ctx.team) === franchise(t.team)
 }
