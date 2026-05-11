@@ -45,3 +45,14 @@ FAILED tests/test_typed_errors_contract.py::test_no_python_traceback_leaks_on_ty
 FAILED tests/test_typed_errors_contract.py::test_no_python_traceback_leaks_on_typed_error[argv8]
 31 failed, 24 passed in 0.26s
 ```
+
+GREEN PHASE — all 3 contract slices closed. INGEST: espn-lane @ 2059fa2. STINTS CLI: cli-lane @ 8b3e44c (built on stints-lane persist seam from 112f415). TYPED ERRORS: cli-lane @ d5acc0a (teamspec parse-error routing). Verifying full suite still green.
+
+```bash
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest tests/test_ingest_contract.py tests/test_stints_cli_contract.py tests/test_typed_errors_contract.py tests/test_cli_contract.py --tb=no --no-header -q
+```
+
+```output
+.......................................................                  [100%]
+55 passed in 3.75s
+```
