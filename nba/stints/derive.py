@@ -28,8 +28,8 @@ class Stint:
 
 def derive_stints(
     events: list[dict[str, Any]],
-    starters_home: list[str],
-    starters_away: list[str],
+    starters_home: list[Any],
+    starters_away: list[Any],
 ) -> list[Stint]:
     stints: list[Stint] = []
     home = tuple(starters_home)

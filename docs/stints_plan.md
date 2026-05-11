@@ -301,20 +301,28 @@ brutus likes to write the red phase before the lane starts.
 
 ```
 nba/stints/
-  derive.py        # exists; do not touch (9/9 green)
-  translate.py     # LANDED (partial): clock math + lineup_hash done;
-                   #   pbp_rows_to_events() pending ESPN vocab
-  persist.py       # TODO: lineup_stints INSERT, idempotency (psycopg)
-  drivers.py       # TODO: single-game + season+team orchestrators
+  derive.py        # exists; 9/9 green; signature widened to Iterable[Any]
+                   # starters so DB integer ids type-check.
+  translate.py     # LANDED: clock math, lineup_hash, EVENT_TYPE_MAP /
+                   # EVENT_TYPE_DROP for the 21 canonical strings, and
+                   # pbp_rows_to_events(rows, home_team_id).
+  persist.py       # LANDED: persist_stints(conn, stints) → int.
+                   # DELETE-then-INSERT idempotency per game_id.
+  drivers.py       # LANDED: derive_for_game(conn, game_id) and
+                   # derive_for_season(conn, season, team_id). Tolerant of
+                   # missing data; CLI handles InvalidGameError up front.
 nba/cli/
-  main.py          # TODO: register `nba stints derive`; replace lineup_stats stub
+  main.py          # cli-lane: register `nba stints derive`; replace
+                   # lineup_stats stub. Re-export persist_stints.
 docs/
-  stints_plan.md       # THIS FILE
-  stints_validation.md # TODO: nba-9b2 deliverable
+  stints_plan.md          # THIS FILE
+  stints_cli_seam.md      # NEW: integration contract for cli-lane
+  stints_validation.md    # TODO: nba-9b2 deliverable
 tests/
-  test_stints.py            # exists; 9/9 green
-  test_stints_translate.py  # LANDED (22 tests): clock math + hash
-  test_stints_persist.py    # TODO: idempotency in a transactional fixture
+  test_stints.py            # 9/9 green (brutus nba-6gz)
+  test_stints_translate.py  # 36 tests: clock math + hash + vocab + rows
+  test_stints_persist.py    # 11 tests: idempotency + clock + hash + shape
+  test_stints_drivers.py    # 5 tests: thin / missing-starters / live-fixture
 ```
 
 `drivers.py` is the only module that touches both the deriver and the DB;
