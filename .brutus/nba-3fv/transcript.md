@@ -179,3 +179,31 @@ FAILED tests/test_cli_contract.py::test_players_show_unknown_player_raises_inval
 FAILED tests/test_cli_contract.py::test_sparse_data_emits_structured_warning
 ========================= 12 failed, 2 passed in 0.18s =========================
 ```
+
+GREEN PHASE — cli-lane (nba-zg0) closed at 7f494e2. Stubbed CLI returns meta.stub=true; typed errors print JSON-line to stderr; exit codes 2 (MultiStatementError) / 3 (InvalidPlayerError) / 4 (EraOutOfRangeError) / 5 (other). generate_scouting_take exposed at nba.cli.main.generate_scouting_take for --no-scouting monkeypatch.
+
+```bash
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest tests/test_cli_contract.py -v --tb=short --no-header
+```
+
+```output
+============================= test session starts ==============================
+collecting ... collected 14 items
+
+tests/test_cli_contract.py::test_schema_returns_valid_shape PASSED       [  7%]
+tests/test_cli_contract.py::test_schema_table_filter_restricts_output PASSED [ 14%]
+tests/test_cli_contract.py::test_sql_select_returns_valid_shape PASSED   [ 21%]
+tests/test_cli_contract.py::test_sql_multistatement_is_rejected PASSED   [ 28%]
+tests/test_cli_contract.py::test_lineup_stats_returns_valid_shape PASSED [ 35%]
+tests/test_cli_contract.py::test_lineup_stats_pre_2003_season_raises_era_error PASSED [ 42%]
+tests/test_cli_contract.py::test_sim_returns_valid_shape PASSED          [ 50%]
+tests/test_cli_contract.py::test_sim_with_scouting_includes_take PASSED  [ 57%]
+tests/test_cli_contract.py::test_sim_no_scouting_omits_take_and_skips_lm PASSED [ 64%]
+tests/test_cli_contract.py::test_players_show_returns_valid_shape PASSED [ 71%]
+tests/test_cli_contract.py::test_players_show_unknown_player_raises_invalid_player_error PASSED [ 78%]
+tests/test_cli_contract.py::test_sparse_data_emits_structured_warning PASSED [ 85%]
+tests/test_cli_contract.py::test_contract_models_importable PASSED       [ 92%]
+tests/test_cli_contract.py::test_error_payload_rejects_unknown_error_code PASSED [100%]
+
+============================== 14 passed in 0.08s ==============================
+```
