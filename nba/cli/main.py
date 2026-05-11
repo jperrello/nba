@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 import typer
 
+from nba.cli import human as human_view
 from nba.cli import warnings as warn
 from nba.cli._schema_stub import TABLES
 from nba.cli.teamspec import TeamSpecError
@@ -20,8 +21,10 @@ app = typer.Typer(
 )
 lineup_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 players_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
+ingest_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 app.add_typer(lineup_app, name="lineup")
 app.add_typer(players_app, name="players")
+app.add_typer(ingest_app, name="ingest")
 
 
 class InvalidPlayerError(Exception):
@@ -257,25 +260,17 @@ def sim(
     }
     take = None if no_scouting else generate_scouting_take(t1, t2, sim_data)
     sim_data["scouting_take"] = take
+    warnings_list = [warn.sparse(340)]
     payload = {
         "data": sim_data,
-        "warnings": [
-            warn.sparse(340),
-        ],
+        "warnings": warnings_list,
         "meta": _meta(cached=False),
     }
     _emit_json(payload)
     if human:
-        score = sim_data["score"]
-        wp = sim_data["win_prob"]
-        sys.stdout.write(
-            f"\n{'═' * 63}\n"
-            f"  {t1['team'].upper()} {score['home']}  —  {t2['team'].upper()} {score['away']}"
-            f"     win prob: {wp['value']:.2f} ± {wp['ci']:.2f}\n"
-            f"{'═' * 63}\n"
-        )
-        if take:
-            sys.stdout.write("\nScouting take:\n  " + take + "\n")
+        sys.stdout.write("\n")
+        sys.stdout.write(human_view.render_sim(t1, t2, sim_data, warnings_list))
+        sys.stdout.flush()
 
 
 @players_app.command("show")
@@ -318,6 +313,43 @@ def players_show(
         "meta": _meta(),
     }
     _emit_json(payload)
+
+
+@ingest_app.command("season")
+def ingest_season_cmd(
+    team: str = typer.Option(..., "--team", help="Team abbreviation (e.g. NYK)."),
+    season: int = typer.Option(..., "--season", help="Season-end year (ESPN convention; 2023 = 2022-23)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview counts without DB writes."),
+) -> None:
+    from nba.contracts import EXIT_CODES
+    from nba.ingest.season import (
+        EraOutOfRangeError as _Era,
+    )
+    from nba.ingest.season import (
+        InvalidTeamError as _InvTeam,
+    )
+    from nba.ingest.season import (
+        ingest_season,
+    )
+    try:
+        out = ingest_season(team, season, dry_run=dry_run)
+    except _InvTeam as e:
+        _emit_error(
+            "InvalidTeamError",
+            f"unknown team abbreviation {e.team!r}",
+            {"team": e.team},
+            EXIT_CODES["InvalidTeamError"],
+        )
+        return
+    except _Era as e:
+        _emit_error(
+            "EraOutOfRangeError",
+            f"season {e.season} is before the data window (>= 2003).",
+            {"season": e.season, "earliest_available": 2003},
+            EXIT_CODES["EraOutOfRangeError"],
+        )
+        return
+    _emit_json(out)
 
 
 def main() -> None:
