@@ -58,6 +58,7 @@ data/raw/
 data/cache/
 data/corpus/
 data/fixtures/large/
+data/models/
 *.parquet
 *.arrow
 runs/

@@ -243,35 +243,50 @@ def sim(
             {"team": t2["team"], "season": t2["season"], "earliest_available": 2003},
             EXIT_CODES["EraOutOfRangeError"],
         )
-    sim_data = {
-        "score": {"home": 114, "away": 109},
-        "win_prob": {"value": 0.61, "ci": 0.08},
-        "matchups": [
-            {"home_player": "Brunson", "away_player": "Haliburton", "edge": 0.7, "note": None},
-            {"home_player": "DiVincenzo", "away_player": "Nesmith", "edge": 0.3, "note": None},
-            {"home_player": "Bridges", "away_player": "Mathurin", "edge": 0.9, "note": None},
-            {
-                "home_player": "Anunoby",
-                "away_player": "Siakam",
-                "edge": -0.4,
-                "note": "cross-matchup flag: switch risk on primary scorer",
-            },
-            {"home_player": "Randle", "away_player": "Turner", "edge": 0.5, "note": None},
-        ],
-        "team_edges": [
-            {"tag": "rebounding", "sign": "+", "magnitude": 1.4, "label": "rebound rate vs Indiana frontcourt"},
-            {"tag": "halfcourt_fit", "sign": "+", "magnitude": 0.8, "label": "cleaner fit at the 4 spot"},
-            {"tag": "spacing", "sign": "-", "magnitude": 1.2, "label": "lost spacing relative to actual roster"},
-            {"tag": "defensive_switchability", "sign": "-", "magnitude": 0.6, "label": "worse on Haliburton actions"},
-        ],
-    }
+    from nba.sim import run as sim_run
+
+    try:
+        result, sim_warnings = sim_run.run(t1["team"], t1["season"], t2["team"], t2["season"])
+        model_versions = sim_run.model_versions()
+        used_predictor = result.used_predictor
+        sim_data = {
+            "score": {"home": result.score_home, "away": result.score_away},
+            "win_prob": {"value": result.win_prob, "ci": result.win_prob_ci},
+            "matchups": result.matchups,
+            "team_edges": result.team_edges,
+        }
+    except Exception as exc:
+        sim_warnings = [{
+            "code": "sim_fallback",
+            "message": f"predictor pipeline failed ({type(exc).__name__}); returning neutral baseline.",
+            "context": {"error": str(exc)},
+        }]
+        used_predictor = False
+        model_versions = {"predictor": "unavailable", "embeddings": "unavailable", "lm": "placeholder-no-lora-v0"}
+        sim_data = {
+            "score": {"home": 110, "away": 110},
+            "win_prob": {"value": 0.5, "ci": 0.10},
+            "matchups": [
+                {"home_player": f"home-{i+1}", "away_player": f"away-{i+1}", "edge": 0.0, "note": None}
+                for i in range(5)
+            ],
+            "team_edges": [
+                {"tag": "rebounding", "sign": "+", "magnitude": 0.0, "label": "rebound rate vs opponent frontcourt"},
+                {"tag": "halfcourt_fit", "sign": "+", "magnitude": 0.0, "label": "halfcourt fit at the wings"},
+                {"tag": "spacing", "sign": "+", "magnitude": 0.0, "label": "spacing vs opponent"},
+                {"tag": "defensive_switchability", "sign": "+", "magnitude": 0.0, "label": "switch coverage vs opponent ballhandlers"},
+            ],
+        }
     take = None if no_scouting else generate_scouting_take(t1, t2, sim_data)
     sim_data["scouting_take"] = take
-    warnings_list = [warn.sparse(340)]
+    warnings_list = sim_warnings
+    meta = _meta(cached=False)
+    meta["model_versions"] = model_versions
+    meta["stub"] = not used_predictor
     payload = {
         "data": sim_data,
         "warnings": warnings_list,
-        "meta": _meta(cached=False),
+        "meta": meta,
     }
     _emit_json(payload)
     if human:

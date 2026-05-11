@@ -1,8 +1,8 @@
 # Lane C — Embeddings + Predictor v0 (ml-lane plan)
 
-> **Status:** `nba-ibw` GREEN. Embeddings landed; brutus's `nba-bbq` smoke (5/5) passes.
-> Next up: `nba-dd1` (predictor + real `nba sim`) and `nba-yb1` (validation gate).
-> Owns beads: `nba-ibw` (embeddings), `nba-dd1` (predictor + real `nba sim`), `nba-yb1` (validation gate).
+> **Status:** `nba-ibw` + `nba-dd1` GREEN. Embeddings + predictor + real `nba sim` landed; 14/14 sim contract tests and 5/5 embeddings smoke pass. Canonical example `knicks-2024 vs pacers-2024` → score 114-116, `meta.stub=False`, real player names/model versions.
+> Next up: `nba-yb1` (held-out validation gate).
+> Owns beads: `nba-ibw` (embeddings, closed), `nba-dd1` (predictor + real `nba sim`, ready to close), `nba-yb1` (validation gate, queued).
 > Frozen surfaces: `nba/contracts.py`, the 14 sim contract tests in `tests/test_cli_contract.py`.
 
 ### Lane B handoff note (read before nba-dd1)
@@ -13,6 +13,15 @@ stints-lane's `docs/stints_validation.md` flagged a systematic **~5.5% possessio
 
 - Built embeddings for **all 463 rostered players in season 2023** (30 teams), not NYK-only. Predictor (`nba-dd1`) needs opponent vectors too; doing it now avoids re-running training later. Brutus's smoke filters to NYK cohort (19 rows) and passes — superset is contract-compatible.
 - **Skipped the SQL view** (`migrations/0003_player_season_stats_view.sql`). With random-init embeddings + no stat features in the predictor input (just embedding sums/means + era + flag), the per-(player, season) stat view has no consumer in v0. Defer to v1.
+
+### Scope adjustments for nba-dd1 (landed)
+
+- **Target = duration-weighted signed margin per second** (`y = pts/duration`, weight = duration). Sidesteps the 5.5% Oliver-weight bias in `possessions` (per `docs/stints_validation.md`'s recommendation).
+- **AdamW with `weight_decay=0.1`, `epochs=3`** (much lower than the original plan's 50). With random-init embeddings + 4000 stints + 3.4M params, longer training overfits hard — the 30-epoch model produced an 84-pt predicted margin (clamped to [70, 150]). 3 epochs leans toward the mean predictor and produces realistic in-range game margins (knicks vs pacers → -7.4 pt margin → 114-116 score).
+- **Score reconstruction** in `nba/sim/run.py`: `home = LEAGUE_AVG_GAME_TOTAL/2 + HOME_COURT_PTS + margin/2`, clamped to `[SCORE_FLOOR, SCORE_CEIL] = [70, 150]`. With realistic margins the clamp is rarely hit.
+- **Season fallback**: requested season not in embeddings → nearest available. `knicks-2024` falls back to `knicks-2023`; a structured `season_fallback` warning surfaces in `warnings[]`.
+- **`scouting_take`** stays a placeholder string per the brief; `--no-scouting` continues to null it.
+- **`meta.stub`** flips to `False` when predictor weights load successfully; `meta.model_versions` reads from `data/models/predictor_latest.json` manifest written at training time.
 
 ---
 
