@@ -363,3 +363,23 @@ Storing by row count (not by hardcoded ID) means new bad games discovered in fut
 **Future values.** If we discover other failure modes (boxscore-missing, schedule-only stubs, postponed-not-played) and need to distinguish them, extend the CHECK constraint in a follow-up migration rather than re-typing the column. `TEXT + CHECK` was chosen over an `ENUM` precisely because adding values to a CHECK is a one-line `ALTER TABLE ... DROP CONSTRAINT ... ADD CONSTRAINT` and doesn't require a `pg_enum` mutation.
 
 **Idempotency.** Uses `ADD COLUMN IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` — safe to re-run.
+
+## `pbp_events.players_on_floor` — placeholder contract (decision D2, post-0002)
+
+`pbp_events.players_on_floor` is declared `JSONB NOT NULL` in 0001. Two writers fill it:
+
+1. **Ingest (espn-lane, `nba/ingest/season.py`):** writes `'[]'::jsonb` on every row at insert time. This is a **sentinel** meaning "lineup not yet derived." The column is NOT NULL by design and never holds SQL `NULL`.
+2. **Stints deriver (stints-lane, `nba/stints/`):** computes the actual 10 player IDs on the floor at each event and `UPDATE`s `players_on_floor` for every event in a game once stint derivation completes successfully.
+
+**Why this layering exists.** Lane A (ingest) writes ESPN data row-by-row as it arrives; on-floor lineups aren't knowable until the substitution chain has been walked end-to-end. Lane B (stints) needs the full PBP already loaded to do that walk. So ingest writes first, stints back-fills.
+
+**Querying contract.**
+
+- A row with `players_on_floor = '[]'::jsonb` means "ingested, not yet derived." Treat as missing.
+- A row with `jsonb_array_length(players_on_floor) = 10` means "derived; 5 home + 5 away IDs sorted into a single array per stints-lane's serialization."
+- Other lengths are a deriver bug. Tests should catch.
+- Filter for derived events: `WHERE jsonb_array_length(players_on_floor) > 0`.
+
+**Why not just make the column nullable.** Schema-lane's call (D2 ruling 2026-05-11): the NOT NULL constraint is a load-bearing guard against accidental null reads in the predictor training query; using a sentinel `[]` makes the "not yet derived" state explicit and queryable without three-valued logic. No migration 0003 is required.
+
+**Cleanup.** When stints derivation is run for a game, `pbp_events.players_on_floor` for every event in that game is overwritten in a single `UPDATE` per game. The empty-array sentinel is therefore a transient state — in steady-state production, every row in `pbp_events` has a 10-id array.
