@@ -152,6 +152,57 @@ class PlayersShowOutput(BaseModel):
     meta: Meta
 
 
+# nba ingest season
+
+class IngestData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    teams_upserted: int
+    players_upserted: int
+    games_upserted: int
+    rosters_upserted: int
+    pbp_events_inserted: int
+    coach_games_upserted: int
+    games_marked_thin: int
+
+
+class IngestMeta(Meta):
+    dry_run: bool
+    cache_path: str
+    team: str
+    season: int
+
+
+class IngestOutput(BaseModel):
+    data: IngestData
+    warnings: list[Warning] = Field(default_factory=list)
+    meta: IngestMeta
+
+
+# nba stints derive
+
+class StintsDeriveData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    stints_persisted: int
+    games_processed: int
+    games_skipped_thin_pbp: int
+    mode: Literal["game", "season"]
+
+
+class StintsDeriveMeta(Meta):
+    mode: Literal["game", "season"]
+    game_id: str | None = None
+    season: int | None = None
+    team: str | None = None
+
+
+class StintsDeriveOutput(BaseModel):
+    data: StintsDeriveData
+    warnings: list[Warning] = Field(default_factory=list)
+    meta: StintsDeriveMeta
+
+
 # Errors (printed to stderr as a single JSON line, non-zero exit code)
 
 ErrorCode = Literal[
@@ -159,7 +210,29 @@ ErrorCode = Literal[
     "InvalidPlayerError",
     "EraOutOfRangeError",
     "InsufficientDataError",
+    "InvalidTeamError",
+    "InvalidSeasonError",
+    "InvalidGameError",
+    "IngestError",
 ]
+
+
+# Stable exit-code table — pinned by brutus contract nba-5ve. Every typed error
+# in the CLI must use exactly the code below. Click's default for usage errors
+# (missing args, conflicting options, etc.) is 2 and collides with
+# MultiStatementError; that overlap is intentional — both are "the input you
+# gave is structurally invalid" and downstream agents can distinguish via the
+# error discriminator in the JSON payload.
+EXIT_CODES: dict[str, int] = {
+    "MultiStatementError": 2,
+    "InvalidPlayerError": 3,
+    "EraOutOfRangeError": 4,
+    "InsufficientDataError": 5,
+    "InvalidTeamError": 6,
+    "InvalidSeasonError": 7,
+    "InvalidGameError": 8,
+    "IngestError": 9,
+}
 
 
 class ErrorPayload(BaseModel):
