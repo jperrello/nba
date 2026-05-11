@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: nba-pg
+    environment:
+      POSTGRES_DB: ${NBA_DB_NAME:-nba}
+      POSTGRES_USER: ${NBA_DB_USER:-nba}
+      POSTGRES_PASSWORD: ${NBA_DB_PASSWORD:-nba}
+    ports:
+      - "${NBA_DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NBA_DB_USER:-nba} -d ${NBA_DB_NAME:-nba}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:
