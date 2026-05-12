@@ -33,7 +33,7 @@ function recentKey(l: RecentLineup): string {
 
 export default function Lineups({ prefill, setPrefill }: Props) {
   const [slots, setSlots] = useState<(SlotPlayer | null)[]>(EMPTY)
-  const [season, setSeason] = useState(2024)
+  const [season, setSeason] = useState(2026)
   const [result, setResult] = useState<ResultState | null>(null)
   const [err, setErr] = useState<ApiErr | null>(null)
   const [loading, setLoading] = useState(false)
