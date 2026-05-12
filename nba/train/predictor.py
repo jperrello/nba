@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import re
+import uuid
 from pathlib import Path
 
 # pyright: reportPrivateImportUsage=false
@@ -18,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 MLRUNS = ROOT / "mlruns"
 ARTIFACTS = ROOT / "data" / "models"
 MANIFEST = ARTIFACTS / "predictor_latest.json"
+PRED_VERSION_FILE = ROOT / "nba" / "predictor" / "version.py"
+DEFAULT_SEASON = 2026
 
 
 def _gather(stints: Stints, idx_of: dict[int, int], table: np.ndarray) -> tuple[torch.Tensor, torch.Tensor, np.ndarray]:
@@ -132,6 +138,50 @@ def main(season: int, epochs: int = 50, batch: int = 64, lr: float = 1e-3, seed:
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2))
     return manifest
+
+
+def _atomic_rewrite_version(path: Path, var: str, value: str) -> None:
+    new = re.sub(
+        rf'^{re.escape(var)}\s*=\s*"[^"]*"',
+        f'{var} = "{value}"',
+        path.read_text(),
+        count=1,
+        flags=re.MULTILINE,
+    )
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text(new)
+    os.replace(tmp, path)
+
+
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    os.replace(tmp, path)
+
+
+def run(season: int | None = None) -> dict:
+    season = season if season is not None else DEFAULT_SEASON
+    inner = main(season=season)
+    data_sha = hashlib.sha256(repr(sorted(inner.items())).encode()).hexdigest()[:8]
+    nonce = uuid.uuid4().hex[:6]
+    version = f"predictor-v1-trained-{data_sha}-{nonce}"
+    _atomic_rewrite_version(PRED_VERSION_FILE, "PREDICTOR_VERSION", version)
+    _atomic_write_json(MANIFEST, {
+        "model_version": version,
+        "run_id": inner.get("run_id"),
+        "season": int(inner["season"]),
+        "weights_path": str(inner["weights_path"]),
+        "final_train_loss": float(inner["final_train_loss"]),
+        "final_val_mse": float(inner["final_val_mse"]),
+        "data_sha": data_sha,
+    })
+    return {
+        "version": version,
+        "n_players": int(inner.get("n_train_stints", 0)),
+        "train_loss": float(inner["final_train_loss"]),
+        "val_mse": float(inner["final_val_mse"]),
+        "artifact_path": str(inner["weights_path"]),
+    }
 
 
 def _cli() -> None:

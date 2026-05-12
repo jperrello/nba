@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
+import re
+import uuid
 from pathlib import Path
 
 import mlflow
@@ -12,6 +16,8 @@ from nba.embeddings.model import PlayerSeasonEmbedding, unit_normalize
 from nba.embeddings.version import EMBEDDINGS_DIM, EMBEDDINGS_VERSION
 
 MLRUNS = Path(__file__).resolve().parents[2] / "mlruns"
+EMB_VERSION_FILE = Path(__file__).resolve().parents[1] / "embeddings" / "version.py"
+DEFAULT_SEASON = 2026
 
 
 def main(season: int, team: str | None, epochs: int = 1, seed: int = 0) -> dict:
@@ -73,6 +79,34 @@ def main(season: int, team: str | None, epochs: int = 1, seed: int = 0) -> dict:
         "n_player_seasons": len(players),
         "n_persisted": n_persisted,
         "train_loss": final_loss,
+    }
+
+
+def _atomic_rewrite_version(path: Path, var: str, value: str) -> None:
+    new = re.sub(
+        rf'^{re.escape(var)}\s*=\s*"[^"]*"',
+        f'{var} = "{value}"',
+        path.read_text(),
+        count=1,
+        flags=re.MULTILINE,
+    )
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text(new)
+    os.replace(tmp, path)
+
+
+def run(season: int | None = None) -> dict:
+    season = season if season is not None else DEFAULT_SEASON
+    inner = main(season=season, team=None, epochs=1, seed=0)
+    data_sha = hashlib.sha256(repr(sorted(inner.items())).encode()).hexdigest()[:8]
+    nonce = uuid.uuid4().hex[:6]
+    version = f"embeddings-v1-trained-{data_sha}-{nonce}"
+    _atomic_rewrite_version(EMB_VERSION_FILE, "EMBEDDINGS_VERSION", version)
+    return {
+        "version": version,
+        "n_players": int(inner["n_player_seasons"]),
+        "train_loss": float(inner["train_loss"]),
+        "artifact_path": None,
     }
 
 
