@@ -149,7 +149,7 @@ export type MatchupRow = {
 
 export type TeamEdge = {
   tag: string
-  sign: "+" | "-"
+  sign: "+" | "-" | "0"
   magnitude: number
   label: string
 }

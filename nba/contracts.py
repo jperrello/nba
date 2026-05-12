@@ -107,7 +107,7 @@ class Matchup(BaseModel):
 
 class TeamEdge(BaseModel):
     tag: str
-    sign: Literal["+", "-"]
+    sign: Literal["+", "-", "0"]
     magnitude: float
     label: str
 

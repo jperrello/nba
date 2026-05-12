@@ -105,8 +105,9 @@ function MatchupsList({ rows }: { rows: MatchupRow[] }) {
 }
 
 function MatchupRowItem({ row }: { row: MatchupRow }) {
-  const positive = row.edge >= 0
-  const mag = Math.min(100, Math.abs(row.edge) * 100 * 2)
+  const neutral = row.edge === 0
+  const positive = !neutral && row.edge > 0
+  const mag = neutral ? 0 : Math.min(100, Math.abs(row.edge) * 100 * 2)
   return (
     <li
       className="card"
@@ -120,13 +121,16 @@ function MatchupRowItem({ row }: { row: MatchupRow }) {
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: positive ? "var(--color-positive)" : "var(--color-negative)",
+            color: neutral
+              ? "var(--color-muted)"
+              : positive
+                ? "var(--color-positive)"
+                : "var(--color-negative)",
             minWidth: 48,
             textAlign: "right",
           }}
         >
-          {positive ? "+" : ""}
-          {row.edge.toFixed(3)}
+          {neutral ? "—" : `${positive ? "+" : ""}${row.edge.toFixed(3)}`}
         </span>
       </div>
       <span style={{ fontSize: 13, textAlign: "right" }}>
@@ -187,8 +191,9 @@ function TeamEdgesBlock({ edges }: { edges: TeamEdge[] }) {
 }
 
 function TeamEdgeRow({ edge }: { edge: TeamEdge }) {
-  const positive = edge.sign === "+"
-  const mag = Math.min(100, edge.magnitude * 100 * 4)
+  const neutral = edge.sign === "0" || edge.magnitude === 0
+  const positive = !neutral && edge.sign === "+"
+  const mag = neutral ? 0 : Math.min(100, edge.magnitude * 100 * 4)
   return (
     <li
       className="card"
@@ -204,12 +209,15 @@ function TeamEdgeRow({ edge }: { edge: TeamEdge }) {
         style={{
           fontSize: 12,
           fontWeight: 600,
-          color: positive ? "var(--color-positive)" : "var(--color-negative)",
+          color: neutral
+            ? "var(--color-muted)"
+            : positive
+              ? "var(--color-positive)"
+              : "var(--color-negative)",
           textAlign: "right",
         }}
       >
-        {positive ? "+" : "−"}
-        {edge.magnitude.toFixed(3)}
+        {neutral ? "—" : `${positive ? "+" : "−"}${edge.magnitude.toFixed(3)}`}
       </span>
     </li>
   )

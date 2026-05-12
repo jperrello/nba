@@ -138,12 +138,31 @@ def _validate_swap_players(field: str, spec: Any) -> None:
 
 
 def generate_scouting_take(team1: Any, team2: Any, sim_data: Any) -> str:
-    return (
-        "Stub scouting take: the model gives the edge to the home side on cleaner "
-        "halfcourt fit, but flags the cross-matchup at the 4 as the swing factor. "
-        "Treat the win-probability band as wider than it looks; the supporting "
-        "stints under this exact configuration are thin."
-    )
+    wp = sim_data["win_prob"]["value"]
+    ci = sim_data["win_prob"].get("ci", 0.0) or 0.0
+    home_team = str(team1.get("team", "home")).title()
+    away_team = str(team2.get("team", "away")).title()
+    edges = sim_data.get("team_edges", []) or []
+    ranked = sorted(edges, key=lambda e: e.get("magnitude", 0.0), reverse=True)
+    top = next((e for e in ranked if e.get("magnitude", 0.0) > 0.0), None)
+    matchups = sim_data.get("matchups", []) or []
+    swing = max(matchups, key=lambda m: abs(m.get("edge", 0.0)), default=None)
+    if abs(wp - 0.5) < 1e-6:
+        parts = [f"{home_team} and {away_team} grade out as a coin flip (±{ci * 100:.1f}%)."]
+    else:
+        favored, fav_wp = (home_team, wp) if wp > 0.5 else (away_team, 1.0 - wp)
+        parts = [f"{favored} favored at {fav_wp * 100:.1f}% (±{ci * 100:.1f}%)."]
+    if top:
+        parts.append(f"Top team edge: {top['label']} ({top['sign']}{top['magnitude']:.3f}).")
+    if swing and abs(swing.get("edge", 0.0)) > 0.0:
+        side = home_team if swing["edge"] >= 0 else away_team
+        parts.append(
+            f"Swing matchup: {swing['home_player']} vs {swing['away_player']} "
+            f"({side} +{abs(swing['edge']):.3f})."
+        )
+    if not top and not swing:
+        parts.append("No team edges or matchup deltas separate the sides at this snapshot.")
+    return " ".join(parts)
 
 
 @app.command()
@@ -267,14 +286,14 @@ def sim(
             "score": {"home": 110, "away": 110},
             "win_prob": {"value": 0.5, "ci": 0.10},
             "matchups": [
-                {"home_player": f"home-{i+1}", "away_player": f"away-{i+1}", "edge": 0.0, "note": None}
-                for i in range(5)
+                {"home_player": "—", "away_player": "—", "edge": 0.0, "note": None}
+                for _ in range(5)
             ],
             "team_edges": [
-                {"tag": "rebounding", "sign": "+", "magnitude": 0.0, "label": "rebound rate vs opponent frontcourt"},
-                {"tag": "halfcourt_fit", "sign": "+", "magnitude": 0.0, "label": "halfcourt fit at the wings"},
-                {"tag": "spacing", "sign": "+", "magnitude": 0.0, "label": "spacing vs opponent"},
-                {"tag": "defensive_switchability", "sign": "+", "magnitude": 0.0, "label": "switch coverage vs opponent ballhandlers"},
+                {"tag": "rebounding", "sign": "0", "magnitude": 0.0, "label": "rebound rate vs opponent frontcourt"},
+                {"tag": "halfcourt_fit", "sign": "0", "magnitude": 0.0, "label": "halfcourt fit at the wings"},
+                {"tag": "spacing", "sign": "0", "magnitude": 0.0, "label": "spacing vs opponent"},
+                {"tag": "defensive_switchability", "sign": "0", "magnitude": 0.0, "label": "switch coverage vs opponent ballhandlers"},
             ],
         }
     take = None if no_scouting else generate_scouting_take(t1, t2, sim_data)

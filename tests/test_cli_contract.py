@@ -187,8 +187,10 @@ def test_sim_returns_valid_shape():
         assert m.home_player
         assert m.away_player
     for edge in parsed.data.team_edges:
-        assert edge.sign in {"+", "-"}
+        assert edge.sign in {"+", "-", "0"}
         assert edge.magnitude >= 0.0
+        if edge.sign == "0":
+            assert edge.magnitude == 0.0, "neutral sign requires zero magnitude"
     assert parsed.meta.cached in (True, False)
     assert parsed.meta.model_versions, "meta.model_versions must be populated"
 
