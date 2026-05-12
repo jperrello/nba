@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nba.ingest.live</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/Documents/nba/.venv/bin/nba</string>
+        <string>ingest</string>
+        <string>live</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__HOME__/Documents/nba</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.nba/ingest.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.nba/ingest.log</string>
+</dict>
+</plist>
