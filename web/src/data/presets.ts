@@ -10,10 +10,10 @@ export type Preset = {
 
 export const PRESETS: Preset[] = [
   {
-    id: "knicks-2024_vs_pacers-2024",
-    label: "Knicks 2024 vs Pacers 2024",
-    home: { team: "knicks", season: 2024 },
-    away: { team: "pacers", season: 2024 },
+    id: "knicks-2026_vs_celtics-2026",
+    label: "Knicks 2026 vs Celtics 2026",
+    home: { team: "knicks", season: 2026 },
+    away: { team: "celtics", season: 2026 },
   },
   {
     id: "warriors-2016_vs_cavaliers-2016",
@@ -47,7 +47,7 @@ export const PRESETS: Preset[] = [
   },
 ]
 
-export const DEFAULT_PRESET_ID = "knicks-2024_vs_pacers-2024"
+export const DEFAULT_PRESET_ID = "knicks-2026_vs_celtics-2026"
 
 export function presetById(id: string): Preset | undefined {
   return PRESETS.find((p) => p.id === id)
