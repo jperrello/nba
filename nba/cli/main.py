@@ -28,10 +28,12 @@ lineup_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 players_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 ingest_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 stints_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
+train_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 app.add_typer(lineup_app, name="lineup")
 app.add_typer(players_app, name="players")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(stints_app, name="stints")
+app.add_typer(train_app, name="train")
 
 
 class InvalidPlayerError(Exception):
@@ -623,6 +625,37 @@ def stints_derive(
         "meta": {**_meta(), "mode": mode, **meta_extras},
     }
     _emit_json(payload)
+
+
+@ingest_app.command("live")
+def ingest_live_cmd(
+    stop_after_ticks: int | None = typer.Option(
+        None, "--stop-after-ticks", help="Stop after N ticks (testing only)."
+    ),
+    log_path: str | None = typer.Option(
+        None, "--log-path", help="Override structured log path (default: ~/.nba/ingest.log)."
+    ),
+    human: bool = typer.Option(False, "--human", help="Pretty-print to stderr."),
+) -> None:
+    from nba.cli.live import run_daemon
+
+    run_daemon(stop_after_ticks=stop_after_ticks, log_path=log_path, human=human)
+
+
+@train_app.command("embeddings")
+def train_embeddings_cmd() -> None:
+    from nba.cli.live import run_train_embeddings
+
+    out = run_train_embeddings()
+    _emit_json(out)
+
+
+@train_app.command("predictor")
+def train_predictor_cmd() -> None:
+    from nba.cli.live import run_train_predictor
+
+    out = run_train_predictor()
+    _emit_json(out)
 
 
 def main() -> None:
