@@ -1,0 +1,40 @@
+{
+  "events": [
+    {
+      "id": "401705003",
+      "date": "2026-05-13T02:00Z",
+      "name": "Los Angeles Lakers at Denver Nuggets",
+      "shortName": "LAL @ DEN",
+      "status": {
+        "clock": 720.0,
+        "displayClock": "12:00",
+        "period": 0,
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false,
+          "description": "Scheduled",
+          "detail": "Sat, May 13 at 7:00 PM MT",
+          "shortDetail": "5/13 - 7:00 PM MT"
+        }
+      },
+      "competitions": [
+        {
+          "id": "401705003",
+          "status": {
+            "type": {
+              "id": "1",
+              "state": "pre",
+              "completed": false
+            }
+          },
+          "competitors": [
+            {"id": "7",  "homeAway": "home", "score": "0", "team": {"abbreviation": "DEN"}},
+            {"id": "13", "homeAway": "away", "score": "0", "team": {"abbreviation": "LAL"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

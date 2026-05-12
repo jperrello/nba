@@ -1,0 +1,88 @@
+{
+  "events": [
+    {
+      "id": "401705100",
+      "date": "2026-05-12T20:00Z",
+      "name": "Chicago Bulls at Indiana Pacers",
+      "shortName": "CHI @ IND",
+      "status": {
+        "clock": 0.0,
+        "displayClock": "0.0",
+        "period": 4,
+        "type": {
+          "id": "3",
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true,
+          "description": "Final"
+        }
+      },
+      "competitions": [
+        {
+          "id": "401705100",
+          "status": {"type": {"state": "post", "completed": true}},
+          "competitors": [
+            {"id": "11", "homeAway": "home", "score": "115", "team": {"abbreviation": "IND"}},
+            {"id": "4",  "homeAway": "away", "score": "110", "team": {"abbreviation": "CHI"}}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401705101",
+      "date": "2026-05-12T22:30Z",
+      "name": "Phoenix Suns at Sacramento Kings",
+      "shortName": "PHX @ SAC",
+      "status": {
+        "clock": 432.0,
+        "displayClock": "7:12",
+        "period": 2,
+        "type": {
+          "id": "2",
+          "name": "STATUS_IN_PROGRESS",
+          "state": "in",
+          "completed": false,
+          "description": "In Progress"
+        }
+      },
+      "competitions": [
+        {
+          "id": "401705101",
+          "status": {"type": {"state": "in", "completed": false}},
+          "competitors": [
+            {"id": "23", "homeAway": "home", "score": "48", "team": {"abbreviation": "SAC"}},
+            {"id": "21", "homeAway": "away", "score": "51", "team": {"abbreviation": "PHX"}}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401705102",
+      "date": "2026-05-13T02:00Z",
+      "name": "Los Angeles Lakers at Denver Nuggets",
+      "shortName": "LAL @ DEN",
+      "status": {
+        "clock": 720.0,
+        "displayClock": "12:00",
+        "period": 0,
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false,
+          "description": "Scheduled"
+        }
+      },
+      "competitions": [
+        {
+          "id": "401705102",
+          "status": {"type": {"state": "pre", "completed": false}},
+          "competitors": [
+            {"id": "7",  "homeAway": "home", "score": "0", "team": {"abbreviation": "DEN"}},
+            {"id": "13", "homeAway": "away", "score": "0", "team": {"abbreviation": "LAL"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

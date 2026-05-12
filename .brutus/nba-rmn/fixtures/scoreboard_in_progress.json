@@ -1,0 +1,43 @@
+{
+  "events": [
+    {
+      "id": "401705002",
+      "date": "2026-05-12T23:30Z",
+      "name": "Miami Heat at Orlando Magic",
+      "shortName": "MIA @ ORL",
+      "status": {
+        "clock": 245.0,
+        "displayClock": "4:05",
+        "period": 3,
+        "type": {
+          "id": "2",
+          "name": "STATUS_IN_PROGRESS",
+          "state": "in",
+          "completed": false,
+          "description": "In Progress",
+          "detail": "4:05 - 3rd Quarter",
+          "shortDetail": "4:05 - 3rd"
+        }
+      },
+      "competitions": [
+        {
+          "id": "401705002",
+          "status": {
+            "clock": 245.0,
+            "period": 3,
+            "type": {
+              "id": "2",
+              "name": "STATUS_IN_PROGRESS",
+              "state": "in",
+              "completed": false
+            }
+          },
+          "competitors": [
+            {"id": "19", "homeAway": "home", "score": "72", "team": {"abbreviation": "ORL"}},
+            {"id": "14", "homeAway": "away", "score": "68", "team": {"abbreviation": "MIA"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

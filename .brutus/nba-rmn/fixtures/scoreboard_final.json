@@ -1,0 +1,45 @@
+{
+  "events": [
+    {
+      "id": "401705001",
+      "date": "2026-05-12T23:30Z",
+      "name": "Boston Celtics at New York Knicks",
+      "shortName": "BOS @ NYK",
+      "status": {
+        "clock": 0.0,
+        "displayClock": "0.0",
+        "period": 4,
+        "type": {
+          "id": "3",
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true,
+          "description": "Final",
+          "detail": "Final",
+          "shortDetail": "Final"
+        }
+      },
+      "competitions": [
+        {
+          "id": "401705001",
+          "status": {
+            "clock": 0.0,
+            "displayClock": "0.0",
+            "period": 4,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final"
+            }
+          },
+          "competitors": [
+            {"id": "18", "homeAway": "home", "score": "108", "team": {"abbreviation": "NYK"}},
+            {"id": "2",  "homeAway": "away", "score": "102", "team": {"abbreviation": "BOS"}}
+          ]
+        }
+      ]
+    }
+  ]
+}
